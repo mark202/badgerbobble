@@ -329,6 +329,147 @@ document.addEventListener('keyup', (e) => {
     keys[e.code] = false;
 });
 
+function setupTouchControls() {
+    const leftJoystick = document.getElementById('left-joystick');
+    const rightJoystick = document.getElementById('right-joystick');
+
+    if (!leftJoystick || !rightJoystick) {
+        return;
+    }
+
+    const initJoystick = (element, onMove) => {
+        const knob = element.querySelector('.joystick-knob');
+        if (!knob) {
+            return;
+        }
+
+        const state = {
+            active: false,
+            identifier: null
+        };
+
+        const resetKnob = () => {
+            knob.style.transition = 'transform 0.12s ease-out';
+            knob.style.transform = 'translate3d(0, 0, 0)';
+            onMove(0, 0, false);
+        };
+
+        const updateFromTouch = (touch) => {
+            const rect = element.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const deltaX = touch.clientX - centerX;
+            const deltaY = touch.clientY - centerY;
+            const maxDistance = Math.min(rect.width, rect.height) / 2;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const angle = Math.atan2(deltaY, deltaX);
+            const clampedDistance = Math.min(distance, maxDistance);
+            const clampedX = Math.cos(angle) * clampedDistance;
+            const clampedY = Math.sin(angle) * clampedDistance;
+
+            knob.style.transition = 'none';
+            knob.style.transform = `translate3d(${clampedX}px, ${clampedY}px, 0)`;
+            onMove(deltaX, deltaY, true);
+        };
+
+        const handleStart = (event) => {
+            if (state.active) {
+                return;
+            }
+            const touch = event.changedTouches[0];
+            if (!touch) {
+                return;
+            }
+            state.active = true;
+            state.identifier = touch.identifier;
+            primeAudio();
+            updateFromTouch(touch);
+            event.preventDefault();
+        };
+
+        const handleMove = (event) => {
+            if (!state.active) {
+                return;
+            }
+            const touch = Array.from(event.changedTouches).find(t => t.identifier === state.identifier);
+            if (!touch) {
+                return;
+            }
+            updateFromTouch(touch);
+            event.preventDefault();
+        };
+
+        const handleEnd = (event) => {
+            if (!state.active) {
+                return;
+            }
+            const touch = Array.from(event.changedTouches).find(t => t.identifier === state.identifier);
+            if (!touch) {
+                return;
+            }
+            state.active = false;
+            state.identifier = null;
+            resetKnob();
+            event.preventDefault();
+        };
+
+        element.addEventListener('touchstart', handleStart, { passive: false });
+        document.addEventListener('touchmove', handleMove, { passive: false });
+        document.addEventListener('touchend', handleEnd);
+        document.addEventListener('touchcancel', handleEnd);
+
+        resetKnob();
+    };
+
+    const movementThreshold = 16;
+    initJoystick(leftJoystick, (deltaX, deltaY, isActive) => {
+        if (!isActive) {
+            keys['ArrowLeft'] = false;
+            keys['ArrowRight'] = false;
+            keys['ArrowUp'] = false;
+            return;
+        }
+
+        if (Math.abs(deltaX) > movementThreshold) {
+            const movingRight = deltaX > 0;
+            keys['ArrowRight'] = movingRight;
+            keys['ArrowLeft'] = !movingRight;
+            facingRight = movingRight;
+        } else {
+            keys['ArrowLeft'] = false;
+            keys['ArrowRight'] = false;
+        }
+
+        if (deltaY < -movementThreshold) {
+            keys['ArrowUp'] = true;
+        } else if (deltaY > -movementThreshold / 2) {
+            keys['ArrowUp'] = false;
+        }
+    });
+
+    const fireThreshold = 18;
+    initJoystick(rightJoystick, (deltaX, deltaY, isActive) => {
+        if (!isActive) {
+            keys['KeyZ'] = false;
+            return;
+        }
+
+        const magnitude = Math.hypot(deltaX, deltaY);
+        if (magnitude > fireThreshold) {
+            keys['KeyZ'] = true;
+            if (Math.abs(deltaX) > movementThreshold) {
+                facingRight = deltaX > 0;
+            }
+        } else {
+            keys['KeyZ'] = false;
+        }
+    });
+}
+
+if ('ontouchstart' in window || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0)) {
+    setupTouchControls();
+}
+
 function handleDiscreteKeyPress(code) {
     if (gameState === GameStates.LOADING) {
         return;
