@@ -7,8 +7,24 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Badger Bobble</h1>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <main class="game-shell">
+        <h1>Badger Bobble</h1>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div class="controls" aria-label="Touch controls">
+            <div class="control-row utility-controls">
+                <button class="control-button" data-key="Enter" data-discrete="true">Start</button>
+                <button class="control-button" data-key="Escape" data-discrete="true">Pause</button>
+            </div>
+            <div class="control-row movement-controls">
+                <button class="control-button" data-key="ArrowLeft" data-hold="true">◀</button>
+                <button class="control-button" data-key="Space" data-hold="true" data-discrete="true">Jump</button>
+                <button class="control-button" data-key="ArrowRight" data-hold="true">▶</button>
+            </div>
+            <div class="control-row action-controls">
+                <button class="control-button" data-key="KeyZ" data-hold="true">Bubble</button>
+            </div>
+        </div>
+    </main>
     <script src="script.js"></script>
 </body>
 </html>
