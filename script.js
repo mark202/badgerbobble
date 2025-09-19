@@ -138,6 +138,77 @@ function buildLevelConfigs() {
                 { x: 310, y: 400, type: EnemyTypes.WALKER },
                 { x: 500, y: 300, type: EnemyTypes.SWOOPER }
             ]
+        },
+        {
+            name: 'Cliffside Clash',
+            enemies: [
+                { x: 90, y: 500, type: EnemyTypes.WALKER },
+                { x: 710, y: 500, type: EnemyTypes.WALKER },
+                { x: 320, y: 370, type: EnemyTypes.HOPPER },
+                { x: 520, y: 370, type: EnemyTypes.HOPPER }
+            ]
+        },
+        {
+            name: 'Swoop School',
+            enemies: [
+                { x: 120, y: 260, type: EnemyTypes.SWOOPER },
+                { x: 680, y: 260, type: EnemyTypes.SWOOPER },
+                { x: 400, y: 180, type: EnemyTypes.SWOOPER },
+                { x: 250, y: 470, type: EnemyTypes.HOPPER }
+            ]
+        },
+        {
+            name: 'Platform Parade',
+            enemies: [
+                { x: 130, y: 500, type: EnemyTypes.HOPPER },
+                { x: 650, y: 500, type: EnemyTypes.WALKER },
+                { x: 280, y: 400, type: EnemyTypes.WALKER },
+                { x: 380, y: 400, type: EnemyTypes.HOPPER },
+                { x: 620, y: 300, type: EnemyTypes.SWOOPER }
+            ]
+        },
+        {
+            name: 'Ledge Lurkers',
+            enemies: [
+                { x: 80, y: 300, type: EnemyTypes.WALKER },
+                { x: 650, y: 300, type: EnemyTypes.WALKER },
+                { x: 280, y: 200, type: EnemyTypes.HOPPER },
+                { x: 520, y: 200, type: EnemyTypes.HOPPER },
+                { x: 400, y: 110, type: EnemyTypes.SWOOPER }
+            ]
+        },
+        {
+            name: 'Spiral Skies',
+            enemies: [
+                { x: 200, y: 460, type: EnemyTypes.HOPPER },
+                { x: 600, y: 460, type: EnemyTypes.HOPPER },
+                { x: 150, y: 340, type: EnemyTypes.SWOOPER },
+                { x: 650, y: 340, type: EnemyTypes.SWOOPER },
+                { x: 400, y: 220, type: EnemyTypes.SWOOPER }
+            ]
+        },
+        {
+            name: 'Cascade Cavern',
+            enemies: [
+                { x: 120, y: 500, type: EnemyTypes.WALKER },
+                { x: 640, y: 500, type: EnemyTypes.WALKER },
+                { x: 250, y: 400, type: EnemyTypes.HOPPER },
+                { x: 530, y: 400, type: EnemyTypes.HOPPER },
+                { x: 360, y: 300, type: EnemyTypes.WALKER },
+                { x: 460, y: 300, type: EnemyTypes.SWOOPER }
+            ]
+        },
+        {
+            name: 'Badger Blitz',
+            enemies: [
+                { x: 120, y: 500, type: EnemyTypes.WALKER },
+                { x: 680, y: 500, type: EnemyTypes.WALKER },
+                { x: 300, y: 400, type: EnemyTypes.HOPPER },
+                { x: 520, y: 400, type: EnemyTypes.HOPPER },
+                { x: 400, y: 300, type: EnemyTypes.SWOOPER },
+                { x: 200, y: 200, type: EnemyTypes.SWOOPER },
+                { x: 600, y: 200, type: EnemyTypes.SWOOPER }
+            ]
         }
     ];
 
