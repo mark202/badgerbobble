@@ -313,6 +313,113 @@ let nextPrizeTimer = 0;
 // Input handling
 let keys = {};
 
+const controlButtons = document.querySelectorAll('.control-button');
+const controlPointerStates = new Map();
+
+controlButtons.forEach((button) => {
+    const key = button.dataset.key;
+    const isHold = button.dataset.hold === 'true';
+    const isDiscrete = button.dataset.discrete === 'true';
+
+    if (!key) {
+        return;
+    }
+
+    if (isHold) {
+        controlPointerStates.set(button, new Set());
+    }
+
+    const pressKey = (event) => {
+        event.preventDefault();
+        primeAudio();
+
+        if (!keys[key]) {
+            handleDiscreteKeyPress(key);
+        } else if (isDiscrete && !isHold) {
+            handleDiscreteKeyPress(key);
+        }
+
+        if (isHold) {
+            const pointerIds = controlPointerStates.get(button);
+            pointerIds.add(event.pointerId);
+            keys[key] = true;
+            button.classList.add('active');
+            if (typeof button.setPointerCapture === 'function') {
+                try {
+                    button.setPointerCapture(event.pointerId);
+                } catch (error) {
+                    // Some browsers may throw if capture is not available.
+                }
+            }
+        } else {
+            keys[key] = true;
+            button.classList.add('active');
+            requestAnimationFrame(() => {
+                keys[key] = false;
+                button.classList.remove('active');
+            });
+        }
+    };
+
+    const releaseKey = (event) => {
+        event.preventDefault();
+        if (!isHold) {
+            return;
+        }
+
+        const pointerIds = controlPointerStates.get(button);
+        if (pointerIds) {
+            pointerIds.delete(event.pointerId);
+            if (typeof button.releasePointerCapture === 'function') {
+                try {
+                    button.releasePointerCapture(event.pointerId);
+                } catch (error) {
+                    // Ignore capture release issues.
+                }
+            }
+
+            if (pointerIds.size === 0) {
+                keys[key] = false;
+                button.classList.remove('active');
+            }
+        }
+    };
+
+    button.addEventListener('pointerdown', pressKey);
+    button.addEventListener('pointerup', releaseKey);
+    button.addEventListener('pointercancel', releaseKey);
+    button.addEventListener('pointerleave', releaseKey);
+    button.addEventListener('lostpointercapture', releaseKey);
+    button.addEventListener('contextmenu', (event) => event.preventDefault());
+});
+
+canvas.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    primeAudio();
+
+    switch (gameState) {
+        case GameStates.TITLE:
+            handleDiscreteKeyPress('Enter');
+            break;
+        case GameStates.LEVEL_TRANSITION:
+            if (pendingLevel !== null) {
+                handleDiscreteKeyPress('Enter');
+            }
+            break;
+        case GameStates.PAUSED:
+            handleDiscreteKeyPress('Escape');
+            break;
+        case GameStates.GAME_OVER:
+        case GameStates.VICTORY:
+            handleDiscreteKeyPress('Enter');
+            break;
+        default:
+            break;
+    }
+});
+
+canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+
 document.addEventListener('keydown', (e) => {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
         e.preventDefault();
