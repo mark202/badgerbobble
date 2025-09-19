@@ -79,16 +79,25 @@ function resetGameVariables() {
     powerUps = [];
     particles = [];
     screenShake = 0;
+    speedBoostTimer = 0;
+    bubbleBoostTimer = 0;
+    fireBubbleTimer = 0;
+    nextPrizeTimer = 0;
     resetBadgerPosition();
     isInvincible = false;
     invincibilityTimer = 0;
     canShoot = true;
     shootTimer = 0;
+    shootCooldown = baseShootCooldown;
+    badgerSpeed = baseBadgerSpeed;
+    currentBubbleSpeed = baseBubbleSpeed;
+    refreshAbilityStats();
     keys = {};
     comboCounter = 0;
     comboTimer = 0;
     currentLevelName = '';
     bestCombo = 0;
+    scheduleNextPrize();
 }
 
 // Level configurations mix handcrafted setups with procedural generation
@@ -180,9 +189,10 @@ function clamp(value, min, max) {
 // Badger properties
 const badgerWidth = 32;
 const badgerHeight = 32;
+const baseBadgerSpeed = 5;
 let badgerX = canvas.width / 2 - badgerWidth / 2;
 let badgerY = canvas.height - badgerHeight - 10; // Start near the bottom
-let badgerSpeed = 5;
+let badgerSpeed = baseBadgerSpeed;
 let isJumping = false;
 let jumpHeight = 10;
 let gravity = 0.5;
@@ -195,17 +205,23 @@ const invincibilityDuration = 120; // Frames (e.g., 2 seconds at 60fps)
 // Bubble properties
 const bubbleWidth = 20;
 const bubbleHeight = 20;
-const bubbleSpeed = 4; // Horizontal speed
+const baseBubbleSpeed = 4; // Horizontal speed
+let currentBubbleSpeed = baseBubbleSpeed;
 const bubbleFloatSpeed = 0.5; // Vertical speed (upwards)
 const bubbleLifetime = 300; // Frames before popping automatically (approx 5 seconds at 60fps)
 const trappedEnemyFloatSpeed = 0.3; // How fast trapped enemies float up
 let canShoot = true; // Cooldown mechanism
-const shootCooldown = 30; // Frames (0.5 seconds at 60fps)
+const baseShootCooldown = 30; // Frames (0.5 seconds at 60fps)
+let shootCooldown = baseShootCooldown;
 let shootTimer = 0;
 
 const PowerUpTypes = {
     BERRY: 'berry',
-    HEART: 'heart'
+    HEART: 'heart',
+    CHERRY: 'cherry',
+    SPEED: 'speed',
+    BUBBLE: 'bubble',
+    FIRE: 'fire'
 };
 
 let powerUps = [];
@@ -218,6 +234,10 @@ let particles = [];
 let audioContext = null;
 let audioUnlocked = false;
 let screenShake = 0;
+let speedBoostTimer = 0;
+let bubbleBoostTimer = 0;
+let fireBubbleTimer = 0;
+let nextPrizeTimer = 0;
 
 // Input handling
 let keys = {};
@@ -368,6 +388,79 @@ function playTone(ctx, { start, frequency, duration, volume = 0.2, type = 'sine'
     osc.connect(gain).connect(ctx.destination);
     osc.start(start);
     osc.stop(start + duration);
+}
+
+function refreshAbilityStats() {
+    badgerSpeed = baseBadgerSpeed * (speedBoostTimer > 0 ? 1.6 : 1);
+    currentBubbleSpeed = baseBubbleSpeed * (bubbleBoostTimer > 0 ? 1.75 : 1);
+    shootCooldown = bubbleBoostTimer > 0 ? Math.max(12, Math.round(baseShootCooldown * 0.6)) : baseShootCooldown;
+}
+
+function updateAbilityTimers() {
+    let needsRefresh = false;
+
+    if (speedBoostTimer > 0) {
+        speedBoostTimer--;
+        if (speedBoostTimer === 0) {
+            needsRefresh = true;
+        }
+    }
+
+    if (bubbleBoostTimer > 0) {
+        bubbleBoostTimer--;
+        if (bubbleBoostTimer === 0) {
+            needsRefresh = true;
+        }
+    }
+
+    if (fireBubbleTimer > 0) {
+        fireBubbleTimer--;
+    }
+
+    if (needsRefresh) {
+        refreshAbilityStats();
+    }
+}
+
+function scheduleNextPrize() {
+    const minSeconds = 10;
+    const maxSeconds = 18;
+    const delaySeconds = minSeconds + Math.random() * (maxSeconds - minSeconds);
+    nextPrizeTimer = Math.round(delaySeconds * 60);
+}
+
+function updatePrizeTimer() {
+    if (nextPrizeTimer <= 0) {
+        return;
+    }
+
+    nextPrizeTimer--;
+    if (nextPrizeTimer <= 0) {
+        spawnRandomPrize();
+    }
+}
+
+function spawnRandomPrize() {
+    const maxPrizes = 2;
+    const currentPrizes = powerUps.filter(item => item.isPrize).length;
+    if (currentPrizes >= maxPrizes) {
+        scheduleNextPrize();
+        return;
+    }
+
+    const prizeTypes = [PowerUpTypes.CHERRY, PowerUpTypes.SPEED, PowerUpTypes.BUBBLE, PowerUpTypes.FIRE];
+    const type = prizeTypes[Math.floor(Math.random() * prizeTypes.length)];
+
+    const groundSpot = { x: 20, y: canvas.height - 20, width: canvas.width - 40, height: 20 };
+    const spawnSpots = [...platforms, groundSpot];
+    const spot = spawnSpots[Math.floor(Math.random() * spawnSpots.length)];
+    const minX = spot.x + 30;
+    const maxX = spot.x + Math.max(spot.width - 30, 60);
+    const spawnX = clamp(minX + Math.random() * (maxX - minX), 30, canvas.width - 30);
+    const spawnY = spot === groundSpot ? canvas.height - 80 : spot.y - 26;
+
+    powerUps.push(new PowerUp(spawnX, spawnY, type, { isPrize: true, life: 60 * 12 }));
+    scheduleNextPrize();
 }
 
 function drawBadger() {
@@ -589,15 +682,17 @@ class Enemy {
 
 // Bubble class/structure
 class Bubble {
-    constructor(x, y, direction) {
+    constructor(x, y, direction, options = {}) {
         this.x = x;
         this.y = y;
         this.width = bubbleWidth;
         this.height = bubbleHeight;
-        this.speedX = direction * bubbleSpeed; // direction is 1 for right, -1 for left
+        const speed = options.speed ?? currentBubbleSpeed;
+        this.speedX = direction * speed; // direction is 1 for right, -1 for left
         this.speedY = -bubbleFloatSpeed; // Bubbles float upwards
         this.life = bubbleLifetime;
         this.state = 'moving'; // 'moving', 'trapping', 'popping' (future use)
+        this.isFire = options.isFire ?? false;
     }
 
     update() {
@@ -618,8 +713,13 @@ class Bubble {
     }
 
     draw() {
-        ctx.fillStyle = 'rgba(173, 216, 230, 0.7)'; // Light blue, semi-transparent
-        ctx.strokeStyle = 'blue';
+        if (this.isFire) {
+            ctx.fillStyle = 'rgba(255, 140, 0, 0.8)';
+            ctx.strokeStyle = '#ff7043';
+        } else {
+            ctx.fillStyle = 'rgba(173, 216, 230, 0.7)'; // Light blue, semi-transparent
+            ctx.strokeStyle = 'blue';
+        }
         ctx.beginPath();
         ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.width / 2, 0, Math.PI * 2);
         ctx.fill();
@@ -628,19 +728,22 @@ class Bubble {
 }
 
 class PowerUp {
-    constructor(x, y, type) {
+    constructor(x, y, type, options = {}) {
         this.type = type;
         this.width = 24;
         this.height = 24;
         this.x = x - this.width / 2;
         this.y = y - this.height / 2;
-        this.life = 60 * 10; // ~10 seconds
+        this.baseY = this.y;
+        this.life = options.life ?? 60 * 10; // ~10 seconds
         this.floatPhase = Math.random() * Math.PI * 2;
+        this.floatMagnitude = options.floatMagnitude ?? (options.isPrize ? 8 : 5);
+        this.isPrize = options.isPrize ?? false;
     }
 
     update() {
         this.floatPhase += 0.08;
-        this.y += Math.sin(this.floatPhase) * 0.4;
+        this.y = this.baseY + Math.sin(this.floatPhase) * this.floatMagnitude;
         this.life--;
     }
 
@@ -650,26 +753,134 @@ class PowerUp {
         ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
         ctx.shadowBlur = 6;
 
-        if (this.type === PowerUpTypes.HEART) {
-            ctx.fillStyle = '#ff5c7a';
-            ctx.beginPath();
-            ctx.moveTo(0, 6);
-            ctx.bezierCurveTo(12, -8, 20, 6, 0, 20);
-            ctx.bezierCurveTo(-20, 6, -12, -8, 0, 6);
-            ctx.fill();
-        } else {
-            ctx.fillStyle = '#7b61ff';
-            ctx.beginPath();
-            ctx.arc(0, 0, 10, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#cdbbff';
-            ctx.beginPath();
-            ctx.arc(-3, -3, 4, 0, Math.PI * 2);
-            ctx.fill();
+        switch (this.type) {
+            case PowerUpTypes.HEART:
+                ctx.fillStyle = '#ff5c7a';
+                ctx.beginPath();
+                ctx.moveTo(0, 6);
+                ctx.bezierCurveTo(12, -8, 20, 6, 0, 20);
+                ctx.bezierCurveTo(-20, 6, -12, -8, 0, 6);
+                ctx.fill();
+                break;
+            case PowerUpTypes.BERRY:
+                ctx.fillStyle = '#7b61ff';
+                ctx.beginPath();
+                ctx.arc(0, 0, 10, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#cdbbff';
+                ctx.beginPath();
+                ctx.arc(-3, -3, 4, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            case PowerUpTypes.CHERRY:
+                drawCherryIcon(ctx);
+                break;
+            case PowerUpTypes.SPEED:
+                drawSpeedIcon(ctx);
+                break;
+            case PowerUpTypes.BUBBLE:
+                drawBubbleBoostIcon(ctx);
+                break;
+            case PowerUpTypes.FIRE:
+                drawFireIcon(ctx);
+                break;
+            default:
+                ctx.fillStyle = '#7b61ff';
+                ctx.beginPath();
+                ctx.arc(0, 0, 10, 0, Math.PI * 2);
+                ctx.fill();
+                break;
         }
 
         ctx.restore();
     }
+}
+
+function drawCherryIcon(ctx) {
+    ctx.fillStyle = '#ff4c6d';
+    ctx.beginPath();
+    ctx.arc(-6, 4, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(6, 0, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#2d9f52';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-2, -6);
+    ctx.quadraticCurveTo(0, -18, 8, -8);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-2, -6);
+    ctx.quadraticCurveTo(-10, -16, -10, -2);
+    ctx.stroke();
+}
+
+function drawSpeedIcon(ctx) {
+    ctx.fillStyle = '#00b8ff';
+    ctx.beginPath();
+    ctx.moveTo(-12, 2);
+    ctx.lineTo(4, -10);
+    ctx.lineTo(4, -2);
+    ctx.lineTo(12, -2);
+    ctx.lineTo(-4, 10);
+    ctx.lineTo(-4, 2);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-6, 0);
+    ctx.lineTo(2, -6);
+    ctx.lineTo(2, 0);
+    ctx.stroke();
+}
+
+function drawBubbleBoostIcon(ctx) {
+    const gradient = ctx.createRadialGradient(-2, -2, 2, 0, 0, 12);
+    gradient.addColorStop(0, 'rgba(173, 216, 230, 0.95)');
+    gradient.addColorStop(1, 'rgba(110, 160, 255, 0.95)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(0, 0, 11, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#4f7cff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 9, Math.PI * 0.15, Math.PI * 1.15);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#d9ecff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-4, 4);
+    ctx.quadraticCurveTo(0, 8, 4, 4);
+    ctx.stroke();
+}
+
+function drawFireIcon(ctx) {
+    const gradient = ctx.createLinearGradient(0, -12, 0, 12);
+    gradient.addColorStop(0, '#ffe082');
+    gradient.addColorStop(0.4, '#ffab40');
+    gradient.addColorStop(1, '#ff5722');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(0, -12);
+    ctx.quadraticCurveTo(10, -4, 4, 12);
+    ctx.quadraticCurveTo(0, 6, -4, 12);
+    ctx.quadraticCurveTo(-10, -2, 0, -12);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.beginPath();
+    ctx.moveTo(0, -8);
+    ctx.quadraticCurveTo(4, -2, 2, 6);
+    ctx.quadraticCurveTo(0, 2, -2, 6);
+    ctx.quadraticCurveTo(-4, 0, 0, -8);
+    ctx.fill();
 }
 
 class Particle {
@@ -708,15 +919,20 @@ function shootBubble() {
     // Start bubble slightly in front of the badger
     const bubbleStartX = facingRight ? badgerX + badgerWidth : badgerX - bubbleWidth;
     const bubbleStartY = badgerY + badgerHeight / 2 - bubbleHeight / 2;
-    bubbles.push(new Bubble(bubbleStartX, bubbleStartY, direction));
+    const bubbleOptions = {
+        speed: currentBubbleSpeed,
+        isFire: fireBubbleTimer > 0
+    };
+    bubbles.push(new Bubble(bubbleStartX, bubbleStartY, direction, bubbleOptions));
 
+    const particleColor = bubbleOptions.isFire ? 'rgba(255, 140, 0, 0.8)' : 'rgba(173, 216, 230, 0.7)';
     for (let i = 0; i < 4; i++) {
         particles.push(new Particle(bubbleStartX, bubbleStartY + bubbleHeight / 2, {
             vx: direction * (1.2 + Math.random() * 0.6),
             vy: (Math.random() - 0.5) * 1.2,
             size: 1.6,
             life: 22,
-            color: 'rgba(173, 216, 230, 0.7)'
+            color: particleColor
         }));
     }
 }
@@ -803,6 +1019,9 @@ function updateGame() {
         isJumping = true;
     }
 
+    updateAbilityTimers();
+    updatePrizeTimer();
+
     if (isInvincible) {
         invincibilityTimer--;
         if (invincibilityTimer <= 0) {
@@ -863,13 +1082,30 @@ function updateGame() {
         enemy.update();
 
         if (enemy.state === 'moving') {
+            let enemyRemoved = false;
             for (let j = bubbles.length - 1; j >= 0; j--) {
                 const bubble = bubbles[j];
                 if (rectsOverlap(bubble.x, bubble.y, bubble.width, bubble.height, enemy.x, enemy.y, enemy.width, enemy.height)) {
-                    enemy.trap();
-                    bubbles.splice(j, 1);
+                    if (bubble.isFire) {
+                        const centerX = enemy.x + enemy.width / 2;
+                        const centerY = enemy.y + enemy.height / 2;
+                        spawnParticles(centerX, centerY, 'fire');
+                        bubbles.splice(j, 1);
+                        enemies.splice(i, 1);
+                        score += 150;
+                        screenShake = Math.max(screenShake, 5);
+                        playSound('pop');
+                        enemyRemoved = true;
+                    } else {
+                        enemy.trap();
+                        bubbles.splice(j, 1);
+                    }
                     break;
                 }
+            }
+
+            if (enemyRemoved) {
+                continue;
             }
         }
 
@@ -939,22 +1175,52 @@ function handleBadgerHit() {
 }
 
 function applyPowerUp(type) {
-    if (type === PowerUpTypes.HEART) {
-        if (lives < maxLives) {
-            lives++;
-        } else {
-            score += 250;
-        }
-        isInvincible = true;
-        invincibilityTimer = invincibilityDuration;
-        playSound('powerup');
-        return;
+    switch (type) {
+        case PowerUpTypes.HEART:
+            if (lives < maxLives) {
+                lives++;
+            } else {
+                score += 250;
+            }
+            isInvincible = true;
+            invincibilityTimer = invincibilityDuration;
+            playSound('powerup');
+            return;
+        case PowerUpTypes.BERRY:
+            score += 200;
+            comboCounter = Math.max(comboCounter, 1);
+            comboTimer = comboTimeout;
+            playSound('powerup');
+            return;
+        case PowerUpTypes.CHERRY:
+            score += 500;
+            comboCounter = Math.max(comboCounter, 2);
+            comboTimer = comboTimeout;
+            playSound('powerup');
+            return;
+        case PowerUpTypes.SPEED:
+            score += 100;
+            speedBoostTimer = 60 * 8;
+            refreshAbilityStats();
+            playSound('powerup');
+            return;
+        case PowerUpTypes.BUBBLE:
+            score += 100;
+            bubbleBoostTimer = 60 * 8;
+            refreshAbilityStats();
+            shootTimer = Math.min(shootTimer, shootCooldown);
+            playSound('powerup');
+            return;
+        case PowerUpTypes.FIRE:
+            score += 150;
+            fireBubbleTimer = 60 * 6;
+            playSound('powerup');
+            return;
+        default:
+            score += 150;
+            playSound('powerup');
+            return;
     }
-
-    score += 200;
-    comboCounter = Math.max(comboCounter, 1);
-    comboTimer = comboTimeout;
-    playSound('powerup');
 }
 
 function resetBadgerPosition() {
@@ -977,7 +1243,17 @@ function maybeSpawnPowerUp(x, y) {
         return;
     }
 
-    const type = Math.random() < 0.7 ? PowerUpTypes.BERRY : PowerUpTypes.HEART;
+    const roll = Math.random();
+    let type;
+    if (roll < 0.55) {
+        type = PowerUpTypes.BERRY;
+    } else if (roll < 0.75) {
+        type = PowerUpTypes.HEART;
+    } else {
+        const abilityPool = [PowerUpTypes.SPEED, PowerUpTypes.BUBBLE, PowerUpTypes.FIRE];
+        type = abilityPool[Math.floor(Math.random() * abilityPool.length)];
+    }
+
     powerUps.push(new PowerUp(x + enemyWidth / 2, y + enemyHeight / 2, type));
 }
 
@@ -985,7 +1261,8 @@ function spawnParticles(x, y, type) {
     const counts = {
         pop: 12,
         power: 16,
-        hit: 18
+        hit: 18,
+        fire: 18
     };
     const count = counts[type] ?? 10;
 
@@ -1006,10 +1283,32 @@ function spawnParticles(x, y, type) {
             options.gravity = -0.02;
         } else if (type === 'hit') {
             options.color = 'rgba(255, 82, 82, 0.85)';
+        } else if (type === 'fire') {
+            options.color = 'rgba(255, 140, 0, 0.9)';
+            options.gravity = -0.01;
+            options.size = 3.5;
         }
 
         particles.push(new Particle(x, y, options));
     }
+}
+
+function getActiveEffectTexts() {
+    const texts = [];
+    if (speedBoostTimer > 0) {
+        texts.push(`Speed Boost ${formatEffectTimer(speedBoostTimer)}`);
+    }
+    if (bubbleBoostTimer > 0) {
+        texts.push(`Bubble Boost ${formatEffectTimer(bubbleBoostTimer)}`);
+    }
+    if (fireBubbleTimer > 0) {
+        texts.push(`Fire Bubbles ${formatEffectTimer(fireBubbleTimer)}`);
+    }
+    return texts;
+}
+
+function formatEffectTimer(timer) {
+    return `${Math.ceil(timer / 60)}s`;
 }
 
 function updateLevelTransition() {
@@ -1107,10 +1406,15 @@ function drawGame() {
     ctx.restore();
 
     if (currentLevel > 0 || gameState === GameStates.PLAYING || gameState === GameStates.PAUSED || gameState === GameStates.LEVEL_TRANSITION) {
+        const effectTexts = getActiveEffectTexts();
+        const baseHudHeight = currentLevelName ? 70 : 54;
+        const effectHeight = effectTexts.length > 0 ? effectTexts.length * 18 + 10 : 0;
+        const hudHeight = baseHudHeight + effectHeight;
+
         ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-        ctx.fillRect(6, 6, 180, 54);
-        ctx.fillRect(canvas.width - 186, 6, 180, 54);
-        ctx.fillRect(canvas.width / 2 - 130, 6, 260, currentLevelName ? 70 : 54);
+        ctx.fillRect(6, 6, 180, hudHeight);
+        ctx.fillRect(canvas.width - 186, 6, 180, hudHeight);
+        ctx.fillRect(canvas.width / 2 - 130, 6, 260, hudHeight);
 
         ctx.fillStyle = 'black';
         ctx.font = '20px Arial';
@@ -1135,6 +1439,14 @@ function drawGame() {
             ctx.font = '18px Arial';
             ctx.fillText(`Combo x${comboCounter}`, 10, 50);
         }
+
+        if (effectTexts.length > 0) {
+            ctx.font = '16px Arial';
+            ctx.fillStyle = '#0d47a1';
+            effectTexts.forEach((text, index) => {
+                ctx.fillText(text, 10, baseHudHeight + 20 + index * 18);
+            });
+        }
     }
 
     switch (gameState) {
@@ -1142,7 +1454,8 @@ function drawGame() {
             drawOverlay([
                 'Badger Bobble',
                 'Press Enter to start',
-                'Collect berries and hearts for bonuses',
+                'Collect berries, hearts, and mystery prizes for bonuses',
+                'Prizes may grant speed, bubble boosts, or fiery shots',
                 'Move: Arrow Keys or A/D  |  Jump: W/Up/Space',
                 'Shoot Bubble: Z or J  |  Pause: P or Escape'
             ], { font: '28px Arial', lineHeight: 40 });
@@ -1603,6 +1916,8 @@ function startLevel(levelNumber) {
         currentLevelName = `Level ${levelNumber}`;
         enemies.push(new Enemy(canvas.width / 2 - enemyWidth / 2, 100, EnemyTypes.WALKER));
     }
+
+    scheduleNextPrize();
 }
 
 // Don't start the game immediately, wait for images via imageLoaded()
