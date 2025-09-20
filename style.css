@@ -10,32 +10,41 @@ body {
     overflow: hidden;
     touch-action: none;
     overscroll-behavior: none;
-    background: linear-gradient(180deg, #0b1c2c 0%, #16324f 50%, #274060 100%);
+    background: radial-gradient(circle at 20% 20%, rgba(90, 134, 210, 0.45), rgba(12, 28, 42, 0.1)), linear-gradient(180deg, #050c18 0%, #0b1c2c 50%, #1a2f3f 100%);
     font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
     color: #f0f4ff;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    position: relative;
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url('mosswood_background.svg') center/cover no-repeat;
+    opacity: 0.5;
+    pointer-events: none;
+    z-index: -2;
+}
+
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at 15% 15%, rgba(255, 255, 255, 0.2) 0%, rgba(40, 91, 124, 0.35) 40%, transparent 70%), radial-gradient(circle at 85% 20%, rgba(255, 255, 255, 0.15) 0%, rgba(33, 61, 92, 0.3) 38%, transparent 70%);
+    pointer-events: none;
+    z-index: -1;
 }
 
 .game-stage {
     position: relative;
     width: 100vw;
     height: 100vh;
+    max-width: 1280px;
+    max-height: 720px;
     display: flex;
     align-items: center;
     justify-content: center;
-}
-
-.game-title {
-    position: absolute;
-    top: clamp(12px, 4vh, 32px);
-    left: 50%;
-    transform: translateX(-50%);
-    margin: 0;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    font-size: clamp(20px, 4vw, 36px);
-    pointer-events: none;
-    z-index: 2;
 }
 
 canvas {
@@ -44,6 +53,9 @@ canvas {
     border: none;
     background: transparent;
     display: block;
+    box-shadow: 0 30px 70px rgba(5, 11, 22, 0.7);
+    border-radius: 20px;
+    overflow: hidden;
 }
 
 .joystick-wrapper {
@@ -71,8 +83,8 @@ canvas {
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background: rgba(11, 28, 44, 0.45);
-    border: 2px solid rgba(240, 244, 255, 0.25);
+    background: rgba(11, 28, 44, 0.55);
+    border: 2px solid rgba(240, 244, 255, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;

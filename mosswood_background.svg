@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#06162d"/>
+      <stop offset="55%" stop-color="#11324c"/>
+      <stop offset="100%" stop-color="#1f3b4e"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#b2d7ff" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#5c8bb2" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="mountainFar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1c2d3f"/>
+      <stop offset="100%" stop-color="#0b141f"/>
+    </linearGradient>
+    <linearGradient id="mountainNear" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#203749"/>
+      <stop offset="100%" stop-color="#112231"/>
+    </linearGradient>
+    <radialGradient id="moon" cx="0.18" cy="0.22" r="0.12">
+      <stop offset="0%" stop-color="#f9fbff"/>
+      <stop offset="70%" stop-color="#dbe9ff"/>
+      <stop offset="100%" stop-color="#dbe9ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <circle cx="320" cy="170" r="120" fill="url(#moon)"/>
+  <path d="M0 520 L200 420 L420 520 L640 400 L900 540 L1180 380 L1400 520 L1600 420 L1600 900 L0 900 Z" fill="url(#mountainFar)" opacity="0.85"/>
+  <path d="M0 640 L200 520 L420 640 L660 500 L900 680 L1180 520 L1500 650 L1600 600 L1600 900 L0 900 Z" fill="url(#mountainNear)" opacity="0.9"/>
+  <path d="M0 900 L0 720 Q180 660 320 720 T640 720 T960 700 T1280 740 T1600 700 L1600 900 Z" fill="#0f1c26"/>
+  <g fill="#1a2d3d" opacity="0.5">
+    <circle cx="180" cy="260" r="3"/>
+    <circle cx="240" cy="180" r="2"/>
+    <circle cx="400" cy="160" r="3"/>
+    <circle cx="520" cy="140" r="2"/>
+    <circle cx="700" cy="220" r="2"/>
+    <circle cx="860" cy="180" r="3"/>
+    <circle cx="1040" cy="200" r="2"/>
+    <circle cx="1220" cy="150" r="3"/>
+    <circle cx="1400" cy="190" r="2"/>
+    <circle cx="1520" cy="240" r="3"/>
+  </g>
+  <rect width="1600" height="900" fill="url(#glow)" opacity="0.35"/>
+</svg>

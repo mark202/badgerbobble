@@ -10,6 +10,20 @@ let renderOffsetX = 0;
 let renderOffsetY = 0;
 let deviceScale = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
+const nightSkySparks = Array.from({ length: 90 }, () => ({
+    x: Math.random(),
+    y: Math.random() * 0.5,
+    radius: 0.8 + Math.random() * 1.6,
+    phase: Math.random() * Math.PI * 2
+}));
+
+const woodlandFireflies = Array.from({ length: 18 }, () => ({
+    x: Math.random(),
+    y: 0.55 + Math.random() * 0.4,
+    drift: Math.random() * 0.6 + 0.2,
+    offset: Math.random() * Math.PI * 2
+}));
+
 const GameStates = {
     LOADING: 'loading',
     TITLE: 'title',
@@ -1674,13 +1688,7 @@ function drawGame() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    const skyOffset = Math.min(currentLevel / maxLevels, 1);
-    gradient.addColorStop(0, skyOffset > 0.6 ? '#3e54ff' : '#87ceeb');
-    gradient.addColorStop(0.6, skyOffset > 0.6 ? '#6f8dff' : '#bfe9ff');
-    gradient.addColorStop(1, '#f6fbff');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawBackdrop();
 
     ctx.save();
     ctx.translate(renderOffsetX, renderOffsetY);
@@ -1725,59 +1733,32 @@ function drawGame() {
     ctx.restore();
 
     if (currentLevel > 0 || gameState === GameStates.PLAYING || gameState === GameStates.PAUSED || gameState === GameStates.LEVEL_TRANSITION) {
-        const effectTexts = getActiveEffectTexts();
-        const baseHudHeight = currentLevelName ? 70 : 54;
-        const effectHeight = effectTexts.length > 0 ? effectTexts.length * 18 + 10 : 0;
-        const hudHeight = baseHudHeight + effectHeight;
+        const textScale = Math.max(0.85, Math.min(1.12, renderScale * 1.2));
+        const fontSize = Math.round(20 * textScale);
+        const topPadding = 16 * textScale;
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-        ctx.fillRect(6, 6, 180, hudHeight);
-        ctx.fillRect(WORLD_WIDTH - 186, 6, 180, hudHeight);
-        ctx.fillRect(WORLD_WIDTH / 2 - 130, 6, 260, hudHeight);
+        ctx.save();
+        ctx.textBaseline = 'top';
+        ctx.font = `${fontSize}px "Trebuchet MS", "Segoe UI", sans-serif`;
+        ctx.fillStyle = '#f3fbff';
+        ctx.shadowColor = 'rgba(2, 10, 18, 0.65)';
+        ctx.shadowBlur = 12 * textScale;
 
-        ctx.fillStyle = 'black';
-        ctx.font = '20px Arial';
         ctx.textAlign = 'left';
-        ctx.fillText(`Score: ${score}`, 10, 25);
-        ctx.textAlign = 'right';
-        ctx.fillText(`Lives: ${lives}`, WORLD_WIDTH - 10, 25);
-        const heartStartX = WORLD_WIDTH - 165;
-        for (let i = 0; i < Math.min(lives, maxLives); i++) {
-            drawHeart(heartStartX + i * 26, 50, 7);
-        }
+        ctx.fillText(`Score ${score}`, 16, topPadding);
+
         ctx.textAlign = 'center';
-        ctx.fillText(`Level ${Math.max(currentLevel, 1)}`, WORLD_WIDTH / 2, 25);
-        if (currentLevelName) {
-            ctx.font = '16px Arial';
-            ctx.fillText(currentLevelName, WORLD_WIDTH / 2, 46);
-        }
-        ctx.textAlign = 'left';
+        const levelLabel = currentLevelName || `Level ${Math.max(currentLevel, 1)}`;
+        ctx.fillText(levelLabel, WORLD_WIDTH / 2, topPadding);
 
-        if (comboCounter > 1 && comboTimer > 0) {
-            ctx.fillStyle = '#1b5e20';
-            ctx.font = '18px Arial';
-            ctx.fillText(`Combo x${comboCounter}`, 10, 50);
-        }
-
-        if (effectTexts.length > 0) {
-            ctx.font = '16px Arial';
-            ctx.fillStyle = '#0d47a1';
-            effectTexts.forEach((text, index) => {
-                ctx.fillText(text, 10, baseHudHeight + 20 + index * 18);
-            });
-        }
+        ctx.textAlign = 'right';
+        ctx.fillText(`Lives ${lives}`, WORLD_WIDTH - 16, topPadding);
+        ctx.restore();
     }
 
     switch (gameState) {
         case GameStates.TITLE:
-            drawOverlay([
-                'Badger Bobble',
-                'Tap anywhere or press Enter to start',
-                'Collect berries, hearts, and mystery prizes for bonuses',
-                'Prizes may grant speed, bubble boosts, or fiery shots',
-                'Move: Arrow Keys or A/D  |  Jump: W/Up/Space',
-                'Shoot Bubble: Z or J  |  Pause: P or Escape'
-            ], { font: '28px Arial', lineHeight: 40 });
+            drawTitleScreen();
             break;
         case GameStates.PAUSED:
             drawOverlay(['Paused', 'Press Escape or P to resume', 'Press R to restart', `Best Combo so far: x${bestCombo}`]);
@@ -1847,6 +1828,220 @@ function drawOverlay(lines, options = {}) {
     }
 
     ctx.restore();
+}
+
+function drawBackdrop() {
+    const progression = Math.min(currentLevel / maxLevels, 1);
+    const skyTop = progression > 0.75 ? '#1f2c5a' : '#071428';
+    const skyMid = progression > 0.5 ? '#143355' : '#0f2744';
+    const skyBottom = '#122437';
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, skyTop);
+    gradient.addColorStop(0.55, skyMid);
+    gradient.addColorStop(1, skyBottom);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const now = performance.now() * 0.001;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    nightSkySparks.forEach(star => {
+        const px = star.x * canvas.width;
+        const py = star.y * canvas.height;
+        const twinkle = (Math.sin(now * 2 + star.phase) + 1.4) * 0.35;
+        const radius = star.radius + twinkle;
+        const gradientSpark = ctx.createRadialGradient(px, py, 0, px, py, radius * 6);
+        gradientSpark.addColorStop(0, `rgba(255, 255, 255, ${0.85 - twinkle * 0.3})`);
+        gradientSpark.addColorStop(0.5, `rgba(173, 214, 255, ${0.35 - twinkle * 0.2})`);
+        gradientSpark.addColorStop(1, 'rgba(10, 20, 35, 0)');
+        ctx.fillStyle = gradientSpark;
+        ctx.beginPath();
+        ctx.arc(px, py, radius * 6, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.restore();
+
+    // moon glow
+    const moonX = canvas.width * 0.2;
+    const moonY = canvas.height * 0.18;
+    const moonRadius = canvas.height * 0.12;
+    const moonGlow = ctx.createRadialGradient(moonX, moonY, moonRadius * 0.3, moonX, moonY, moonRadius * 1.4);
+    moonGlow.addColorStop(0, 'rgba(246, 250, 255, 0.95)');
+    moonGlow.addColorStop(0.55, 'rgba(210, 225, 255, 0.45)');
+    moonGlow.addColorStop(1, 'rgba(26, 43, 63, 0)');
+    ctx.fillStyle = moonGlow;
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, moonRadius * 1.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#f5f8ff';
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, moonRadius * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // distant ridges
+    drawMountainLayer([{ x: 0, y: 0.62 }, { x: 0.12, y: 0.52 }, { x: 0.28, y: 0.6 }, { x: 0.46, y: 0.48 }, { x: 0.65, y: 0.66 }, { x: 0.86, y: 0.5 }, { x: 1, y: 0.6 }], '#0d1e31', 0.9);
+    drawMountainLayer([{ x: 0, y: 0.72 }, { x: 0.16, y: 0.6 }, { x: 0.35, y: 0.68 }, { x: 0.56, y: 0.56 }, { x: 0.74, y: 0.72 }, { x: 0.92, y: 0.6 }, { x: 1, y: 0.7 }], '#13263a', 0.92);
+    drawMountainLayer([{ x: 0, y: 0.84 }, { x: 0.2, y: 0.7 }, { x: 0.4, y: 0.8 }, { x: 0.65, y: 0.66 }, { x: 0.82, y: 0.78 }, { x: 1, y: 0.72 }], '#162d40', 0.95);
+
+    // woodland haze
+    const mistGradient = ctx.createLinearGradient(0, canvas.height * 0.6, 0, canvas.height);
+    mistGradient.addColorStop(0, 'rgba(34, 64, 82, 0.0)');
+    mistGradient.addColorStop(1, 'rgba(18, 37, 48, 0.85)');
+    ctx.fillStyle = mistGradient;
+    ctx.fillRect(0, canvas.height * 0.55, canvas.width, canvas.height * 0.45);
+
+    // fireflies shimmering near ground
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    woodlandFireflies.forEach(firefly => {
+        const px = firefly.x * canvas.width;
+        const py = firefly.y * canvas.height + Math.sin(now * firefly.drift + firefly.offset) * canvas.height * 0.02;
+        const pulse = (Math.sin(now * 4 + firefly.offset) + 1) * 0.5;
+        const size = 2 + pulse * 4;
+        const glow = ctx.createRadialGradient(px, py, 0, px, py, size * 5);
+        glow.addColorStop(0, `rgba(255, 240, 170, ${0.8})`);
+        glow.addColorStop(0.4, `rgba(255, 191, 105, ${0.45})`);
+        glow.addColorStop(1, 'rgba(20, 35, 40, 0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(px, py, size * 5, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.restore();
+}
+
+function drawMountainLayer(points, color, opacity = 1) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.globalAlpha = opacity;
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height);
+    points.forEach(point => {
+        ctx.lineTo(point.x * canvas.width, point.y * canvas.height);
+    });
+    ctx.lineTo(canvas.width, canvas.height);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawTitleScreen() {
+    ctx.save();
+
+    const textScale = Math.max(0.78, Math.min(1.08, renderScale * 1.15));
+    const panelWidth = Math.min(640, WORLD_WIDTH - 80);
+    const paddingX = 36 * textScale;
+    const paddingY = 32 * textScale;
+    const titleSize = 48 * textScale;
+    const taglineSize = 22 * textScale;
+    const bodySize = 18 * textScale;
+    const controlsSize = 18 * textScale;
+    const sectionGap = 24 * textScale;
+    const storyLineHeight = 24 * textScale;
+    const controlsLineHeight = 22 * textScale;
+
+    const storyLines = [
+        'When twilight settles over Mosswood Grove, a gentle badger',
+        'named Bobble keeps watch over the moonlit berries that feed',
+        'the woodland folk. Mischievous sprites have swept in to steal',
+        'the harvest—unless Bobble can bubble them up first!',
+        '',
+        'Float across glimmering branches, rescue the grove\'s treasures,',
+        'and uncover shimmering prizes that grant bursts of forest magic.'
+    ];
+
+    const controls = [
+        'Move: Arrow Keys or A/D    Jump: W / Up / Space',
+        'Shoot Bubble: Z or J    Pause: P or Escape'
+    ];
+
+    const storyBlockHeight = storyLines.reduce((height, line) => (
+        height + (line.trim() ? storyLineHeight : storyLineHeight * 0.6)
+    ), 0);
+    const callToActionHeight = 22 * textScale;
+    const controlsBlockHeight = controls.length * controlsLineHeight;
+
+    const panelHeight = paddingY * 2 + titleSize + taglineSize + sectionGap + storyBlockHeight + sectionGap + callToActionHeight + sectionGap * 0.6 + controlsBlockHeight;
+    const x = (WORLD_WIDTH - panelWidth) / 2;
+    const y = WORLD_HEIGHT / 2 - panelHeight / 2;
+    const borderRadius = 18;
+
+    ctx.fillStyle = 'rgba(6, 22, 36, 0.85)';
+    roundRect(ctx, x, y, panelWidth, panelHeight, borderRadius);
+    ctx.fill();
+
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(188, 228, 255, 0.5)';
+    roundRect(ctx, x, y, panelWidth, panelHeight, borderRadius);
+    ctx.stroke();
+
+    const innerGlow = ctx.createLinearGradient(0, y, 0, y + panelHeight);
+    innerGlow.addColorStop(0, 'rgba(110, 180, 255, 0.28)');
+    innerGlow.addColorStop(1, 'rgba(20, 40, 60, 0.35)');
+    ctx.fillStyle = innerGlow;
+    roundRect(ctx, x + 8, y + 8, panelWidth - 16, panelHeight - 16, borderRadius - 6);
+    ctx.fill();
+
+    let cursorY = y + paddingY;
+
+    ctx.fillStyle = '#f2f9ff';
+    ctx.textAlign = 'center';
+    ctx.font = `${Math.round(titleSize)}px "Trebuchet MS", "Segoe UI", sans-serif`;
+    cursorY += titleSize;
+    ctx.fillText('Badger Bobble', WORLD_WIDTH / 2, cursorY);
+
+    ctx.font = `${Math.round(taglineSize)}px "Trebuchet MS", "Segoe UI", sans-serif`;
+    ctx.fillStyle = '#a8dcff';
+    cursorY += taglineSize + 6 * textScale;
+    ctx.fillText('Guardian of Mosswood Grove', WORLD_WIDTH / 2, cursorY);
+
+    cursorY += sectionGap;
+    ctx.textAlign = 'left';
+    ctx.font = `${Math.round(bodySize)}px "Segoe UI", sans-serif`;
+    ctx.fillStyle = '#eaf6ff';
+    const storyX = x + paddingX;
+    storyLines.forEach(line => {
+        const isBlank = !line.trim();
+        cursorY += isBlank ? storyLineHeight * 0.6 : storyLineHeight;
+        if (!isBlank) {
+            ctx.fillText(line, storyX, cursorY);
+        }
+    });
+
+    cursorY += sectionGap;
+    ctx.textAlign = 'center';
+    ctx.font = `${Math.round(bodySize)}px "Segoe UI", sans-serif`;
+    ctx.fillStyle = '#ffe8a6';
+    cursorY += callToActionHeight;
+    ctx.fillText('Tap anywhere or press Enter to begin your vigil.', WORLD_WIDTH / 2, cursorY);
+
+    cursorY += sectionGap * 0.6;
+    ctx.fillStyle = '#bde3ff';
+    ctx.font = `${Math.round(controlsSize)}px "Segoe UI", sans-serif`;
+    controls.forEach(line => {
+        cursorY += controlsLineHeight;
+        ctx.fillText(line, WORLD_WIDTH / 2, cursorY);
+    });
+
+    ctx.restore();
+}
+
+function roundRect(context, x, y, width, height, radius) {
+    const r = Math.min(radius, width / 2, height / 2);
+    context.beginPath();
+    context.moveTo(x + r, y);
+    context.lineTo(x + width - r, y);
+    context.quadraticCurveTo(x + width, y, x + width, y + r);
+    context.lineTo(x + width, y + height - r);
+    context.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+    context.lineTo(x + r, y + height);
+    context.quadraticCurveTo(x, y + height, x, y + height - r);
+    context.lineTo(x, y + r);
+    context.quadraticCurveTo(x, y, x + r, y);
+    context.closePath();
 }
 
 function drawHeart(x, y, size, color = '#ff5c7a') {
