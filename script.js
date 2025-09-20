@@ -1,6 +1,14 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+const WORLD_WIDTH = 800;
+const WORLD_HEIGHT = 600;
+
+let renderScale = 1;
+let renderOffsetX = 0;
+let renderOffsetY = 0;
+let deviceScale = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+
 const GameStates = {
     LOADING: 'loading',
     TITLE: 'title',
@@ -14,6 +22,37 @@ let gameState = GameStates.LOADING;
 let lastFrameTime = performance.now();
 let accumulatedTime = 0;
 const frameDuration = 1000 / 60; // Fixed timestep for core updates
+
+function resizeCanvas() {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    deviceScale = window.devicePixelRatio || 1;
+    const targetWidth = Math.max(1, Math.floor(window.innerWidth * deviceScale));
+    const targetHeight = Math.max(1, Math.floor(window.innerHeight * deviceScale));
+
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+    }
+
+    canvas.style.width = '100vw';
+    canvas.style.height = '100vh';
+
+    const scaleX = canvas.width / WORLD_WIDTH;
+    const scaleY = canvas.height / WORLD_HEIGHT;
+
+    renderScale = Math.min(scaleX, scaleY);
+    renderOffsetX = (canvas.width - WORLD_WIDTH * renderScale) / 2;
+    renderOffsetY = (canvas.height - WORLD_HEIGHT * renderScale) / 2;
+}
+
+if (typeof window !== 'undefined') {
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', resizeCanvas);
+}
 
 // Image loading
 let badgerImg = new Image();
@@ -240,8 +279,8 @@ function createProceduralLevel(levelNumber) {
         }
 
         enemies.push({
-            x: clamp(x, 20, canvas.width - enemyWidth - 20),
-            y: clamp(y, 60, canvas.height - enemyHeight - 40),
+            x: clamp(x, 20, WORLD_WIDTH - enemyWidth - 20),
+            y: clamp(y, 60, WORLD_HEIGHT - enemyHeight - 40),
             type
         });
     }
@@ -261,8 +300,8 @@ function clamp(value, min, max) {
 const badgerWidth = 32;
 const badgerHeight = 32;
 const baseBadgerSpeed = 5;
-let badgerX = canvas.width / 2 - badgerWidth / 2;
-let badgerY = canvas.height - badgerHeight - 10; // Start near the bottom
+let badgerX = WORLD_WIDTH / 2 - badgerWidth / 2;
+let badgerY = WORLD_HEIGHT - badgerHeight - 10; // Start near the bottom
 let badgerSpeed = baseBadgerSpeed;
 let isJumping = false;
 let jumpHeight = 10;
@@ -329,12 +368,192 @@ document.addEventListener('keyup', (e) => {
     keys[e.code] = false;
 });
 
+function handlePrimaryAction() {
+    if (gameState === GameStates.LOADING) {
+        return false;
+    }
+
+    switch (gameState) {
+        case GameStates.TITLE:
+            startNewGame();
+            playSound('level');
+            return true;
+        case GameStates.LEVEL_TRANSITION:
+            if (pendingLevel !== null) {
+                startLevel(pendingLevel);
+                pendingLevel = null;
+                levelTransitionTimer = 0;
+                setGameState(GameStates.PLAYING);
+                playSound('level');
+                return true;
+            }
+            break;
+        case GameStates.GAME_OVER:
+        case GameStates.VICTORY:
+            setGameState(GameStates.TITLE);
+            resetGameVariables();
+            return true;
+        default:
+            break;
+    }
+
+    return false;
+}
+
+function setupTouchControls() {
+    const leftJoystick = document.getElementById('left-joystick');
+    const rightJoystick = document.getElementById('right-joystick');
+
+    if (!leftJoystick || !rightJoystick) {
+        return;
+    }
+
+    const initJoystick = (element, onMove) => {
+        const knob = element.querySelector('.joystick-knob');
+        if (!knob) {
+            return;
+        }
+
+        const state = {
+            active: false,
+            identifier: null
+        };
+
+        const resetKnob = () => {
+            knob.style.transition = 'transform 0.12s ease-out';
+            knob.style.transform = 'translate3d(0, 0, 0)';
+            onMove(0, 0, false);
+        };
+
+        const updateFromTouch = (touch) => {
+            const rect = element.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const deltaX = touch.clientX - centerX;
+            const deltaY = touch.clientY - centerY;
+            const maxDistance = Math.min(rect.width, rect.height) / 2;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const angle = Math.atan2(deltaY, deltaX);
+            const clampedDistance = Math.min(distance, maxDistance);
+            const clampedX = Math.cos(angle) * clampedDistance;
+            const clampedY = Math.sin(angle) * clampedDistance;
+
+            knob.style.transition = 'none';
+            knob.style.transform = `translate3d(${clampedX}px, ${clampedY}px, 0)`;
+            onMove(deltaX, deltaY, true);
+        };
+
+        const handleStart = (event) => {
+            if (state.active) {
+                return;
+            }
+            const touch = event.changedTouches[0];
+            if (!touch) {
+                return;
+            }
+            state.active = true;
+            state.identifier = touch.identifier;
+            primeAudio();
+            handlePrimaryAction();
+            updateFromTouch(touch);
+            event.preventDefault();
+        };
+
+        const handleMove = (event) => {
+            if (!state.active) {
+                return;
+            }
+            const touch = Array.from(event.changedTouches).find(t => t.identifier === state.identifier);
+            if (!touch) {
+                return;
+            }
+            updateFromTouch(touch);
+            event.preventDefault();
+        };
+
+        const handleEnd = (event) => {
+            if (!state.active) {
+                return;
+            }
+            const touch = Array.from(event.changedTouches).find(t => t.identifier === state.identifier);
+            if (!touch) {
+                return;
+            }
+            state.active = false;
+            state.identifier = null;
+            resetKnob();
+            event.preventDefault();
+        };
+
+        element.addEventListener('touchstart', handleStart, { passive: false });
+        document.addEventListener('touchmove', handleMove, { passive: false });
+        document.addEventListener('touchend', handleEnd);
+        document.addEventListener('touchcancel', handleEnd);
+
+        resetKnob();
+    };
+
+    const movementThreshold = 16;
+    initJoystick(leftJoystick, (deltaX, deltaY, isActive) => {
+        if (!isActive) {
+            keys['ArrowLeft'] = false;
+            keys['ArrowRight'] = false;
+            keys['ArrowUp'] = false;
+            return;
+        }
+
+        if (Math.abs(deltaX) > movementThreshold) {
+            const movingRight = deltaX > 0;
+            keys['ArrowRight'] = movingRight;
+            keys['ArrowLeft'] = !movingRight;
+            facingRight = movingRight;
+        } else {
+            keys['ArrowLeft'] = false;
+            keys['ArrowRight'] = false;
+        }
+
+        if (deltaY < -movementThreshold) {
+            keys['ArrowUp'] = true;
+        } else if (deltaY > -movementThreshold / 2) {
+            keys['ArrowUp'] = false;
+        }
+    });
+
+    const fireThreshold = 18;
+    initJoystick(rightJoystick, (deltaX, deltaY, isActive) => {
+        if (!isActive) {
+            keys['KeyZ'] = false;
+            return;
+        }
+
+        const magnitude = Math.hypot(deltaX, deltaY);
+        if (magnitude > fireThreshold) {
+            keys['KeyZ'] = true;
+            if (Math.abs(deltaX) > movementThreshold) {
+                facingRight = deltaX > 0;
+            }
+        } else {
+            keys['KeyZ'] = false;
+        }
+    });
+}
+
+if ('ontouchstart' in window || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0)) {
+    setupTouchControls();
+}
+
 function handleDiscreteKeyPress(code) {
     if (gameState === GameStates.LOADING) {
         return;
     }
 
     primeAudio();
+
+    if (code === 'Enter' || code === 'Space') {
+        if (handlePrimaryAction()) {
+            return;
+        }
+    }
 
     if (code === 'Escape' || code === 'KeyP') {
         if (gameState === GameStates.PLAYING) {
@@ -348,36 +567,30 @@ function handleDiscreteKeyPress(code) {
     }
 
     switch (gameState) {
-        case GameStates.TITLE:
-            if (code === 'Enter' || code === 'Space') {
-                startNewGame();
-                playSound('level');
-            }
-            break;
         case GameStates.PAUSED:
             if (code === 'KeyR') {
                 startNewGame();
                 playSound('level');
             }
             break;
-        case GameStates.LEVEL_TRANSITION:
-            if (code === 'Enter' && pendingLevel !== null) {
-                startLevel(pendingLevel);
-                pendingLevel = null;
-                levelTransitionTimer = 0;
-                setGameState(GameStates.PLAYING);
-                playSound('level');
-            }
-            break;
-        case GameStates.GAME_OVER:
-        case GameStates.VICTORY:
-            if (code === 'Enter' || code === 'Space') {
-                setGameState(GameStates.TITLE);
-                resetGameVariables();
-            }
-            break;
         default:
             break;
+    }
+}
+
+const handlePrimaryPointer = (event) => {
+    primeAudio();
+    if (handlePrimaryAction()) {
+        event.preventDefault();
+    }
+};
+
+if (typeof window !== 'undefined') {
+    if (window.PointerEvent) {
+        canvas.addEventListener('pointerdown', handlePrimaryPointer);
+    } else {
+        canvas.addEventListener('touchstart', handlePrimaryPointer, { passive: false });
+        canvas.addEventListener('mousedown', handlePrimaryPointer);
     }
 }
 
@@ -522,13 +735,13 @@ function spawnRandomPrize() {
     const prizeTypes = [PowerUpTypes.CHERRY, PowerUpTypes.SPEED, PowerUpTypes.BUBBLE, PowerUpTypes.FIRE];
     const type = prizeTypes[Math.floor(Math.random() * prizeTypes.length)];
 
-    const groundSpot = { x: 20, y: canvas.height - 20, width: canvas.width - 40, height: 20 };
+    const groundSpot = { x: 20, y: WORLD_HEIGHT - 20, width: WORLD_WIDTH - 40, height: 20 };
     const spawnSpots = [...platforms, groundSpot];
     const spot = spawnSpots[Math.floor(Math.random() * spawnSpots.length)];
     const minX = spot.x + 30;
     const maxX = spot.x + Math.max(spot.width - 30, 60);
-    const spawnX = clamp(minX + Math.random() * (maxX - minX), 30, canvas.width - 30);
-    const spawnY = spot === groundSpot ? canvas.height - 80 : spot.y - 26;
+    const spawnX = clamp(minX + Math.random() * (maxX - minX), 30, WORLD_WIDTH - 30);
+    const spawnY = spot === groundSpot ? WORLD_HEIGHT - 80 : spot.y - 26;
 
     powerUps.push(new PowerUp(spawnX, spawnY, type, { isPrize: true, life: 60 * 12 }));
     scheduleNextPrize();
@@ -608,8 +821,8 @@ class Enemy {
         this.speedY += this.gravity;
         this.onPlatform = false;
 
-        if (this.y + this.height >= canvas.height) {
-            this.y = canvas.height - this.height;
+        if (this.y + this.height >= WORLD_HEIGHT) {
+            this.y = WORLD_HEIGHT - this.height;
             this.speedY = 0;
             this.onPlatform = true;
         }
@@ -632,13 +845,13 @@ class Enemy {
             this.x = 0;
             this.speedX *= -1;
             this.updateFacingFromSpeed();
-        } else if (this.x + this.width >= canvas.width && this.speedX > 0) {
-            this.x = canvas.width - this.width;
+        } else if (this.x + this.width >= WORLD_WIDTH && this.speedX > 0) {
+            this.x = WORLD_WIDTH - this.width;
             this.speedX *= -1;
             this.updateFacingFromSpeed();
         }
 
-        if (this.onPlatform && this.y < canvas.height - this.height) {
+        if (this.onPlatform && this.y < WORLD_HEIGHT - this.height) {
             let standingPlatform = null;
             for (const platform of platforms) {
                 if (
@@ -702,7 +915,7 @@ class Enemy {
             this.speedY *= 0.9;
             if (Math.abs(this.speedY) < 0.3) {
                 this.speedY = 0;
-                this.baseY = clamp(this.y, 80, canvas.height - this.height - 120);
+                this.baseY = clamp(this.y, 80, WORLD_HEIGHT - this.height - 120);
             }
         }
 
@@ -710,13 +923,13 @@ class Enemy {
             this.x = 0;
             this.speedX = Math.abs(this.speedX);
             this.facing = 1;
-        } else if (this.x + this.width >= canvas.width) {
-            this.x = canvas.width - this.width;
+        } else if (this.x + this.width >= WORLD_WIDTH) {
+            this.x = WORLD_WIDTH - this.width;
             this.speedX = -Math.abs(this.speedX);
             this.facing = -1;
         }
 
-        this.y = clamp(this.y, 60, canvas.height - this.height - 120);
+        this.y = clamp(this.y, 60, WORLD_HEIGHT - this.height - 120);
     }
 
     trap() {
@@ -733,7 +946,7 @@ class Enemy {
         this.updateFacingFromSpeed();
         this.behaviorTimer = Math.floor(Math.random() * 120) + 60;
         if (this.type === EnemyTypes.SWOOPER) {
-            this.baseY = clamp(this.y, 80, canvas.height - this.height - 120);
+            this.baseY = clamp(this.y, 80, WORLD_HEIGHT - this.height - 120);
         }
     }
 
@@ -772,7 +985,7 @@ class Bubble {
         this.life--;
 
         // Basic wall bouncing (optional, can be refined)
-        if (this.x <= 0 || this.x + this.width >= canvas.width) {
+        if (this.x <= 0 || this.x + this.width >= WORLD_WIDTH) {
             this.speedX *= -1;
         }
         // Stop floating up at the top
@@ -1042,8 +1255,8 @@ function handleInput() {
     if (badgerX < 0) {
         badgerX = 0;
     }
-    if (badgerX + badgerWidth > canvas.width) {
-        badgerX = canvas.width - badgerWidth;
+    if (badgerX + badgerWidth > WORLD_WIDTH) {
+        badgerX = WORLD_WIDTH - badgerWidth;
     }
 }
 
@@ -1053,8 +1266,8 @@ function updateGame() {
     badgerY += velocityY;
     velocityY += gravity;
 
-    if (badgerY + badgerHeight >= canvas.height) {
-        badgerY = canvas.height - badgerHeight;
+    if (badgerY + badgerHeight >= WORLD_HEIGHT) {
+        badgerY = WORLD_HEIGHT - badgerHeight;
         isJumping = false;
         velocityY = 0;
         onPlatform = true;
@@ -1086,7 +1299,7 @@ function updateGame() {
         }
     }
 
-    if (!onPlatform && badgerY + badgerHeight < canvas.height) {
+    if (!onPlatform && badgerY + badgerHeight < WORLD_HEIGHT) {
         isJumping = true;
     }
 
@@ -1295,8 +1508,8 @@ function applyPowerUp(type) {
 }
 
 function resetBadgerPosition() {
-    badgerX = canvas.width / 2 - badgerWidth / 2;
-    badgerY = canvas.height - badgerHeight - 10;
+    badgerX = WORLD_WIDTH / 2 - badgerWidth / 2;
+    badgerY = WORLD_HEIGHT - badgerHeight - 10;
     velocityY = 0;
     isJumping = false;
     facingRight = true;
@@ -1422,6 +1635,7 @@ function startNewGame() {
 }
 
 function initializeGame() {
+    resizeCanvas();
     resetGameVariables();
     setGameState(GameStates.TITLE);
     lastFrameTime = performance.now();
@@ -1430,6 +1644,7 @@ function initializeGame() {
 }
 
 function drawGame() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -1439,6 +1654,10 @@ function drawGame() {
     gradient.addColorStop(1, '#f6fbff');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.translate(renderOffsetX, renderOffsetY);
+    ctx.scale(renderScale, renderScale);
 
     ctx.save();
     if (screenShake > 0) {
@@ -1484,24 +1703,24 @@ function drawGame() {
 
         ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
         ctx.fillRect(6, 6, 180, hudHeight);
-        ctx.fillRect(canvas.width - 186, 6, 180, hudHeight);
-        ctx.fillRect(canvas.width / 2 - 130, 6, 260, hudHeight);
+        ctx.fillRect(WORLD_WIDTH - 186, 6, 180, hudHeight);
+        ctx.fillRect(WORLD_WIDTH / 2 - 130, 6, 260, hudHeight);
 
         ctx.fillStyle = 'black';
         ctx.font = '20px Arial';
         ctx.textAlign = 'left';
         ctx.fillText(`Score: ${score}`, 10, 25);
         ctx.textAlign = 'right';
-        ctx.fillText(`Lives: ${lives}`, canvas.width - 10, 25);
-        const heartStartX = canvas.width - 165;
+        ctx.fillText(`Lives: ${lives}`, WORLD_WIDTH - 10, 25);
+        const heartStartX = WORLD_WIDTH - 165;
         for (let i = 0; i < Math.min(lives, maxLives); i++) {
             drawHeart(heartStartX + i * 26, 50, 7);
         }
         ctx.textAlign = 'center';
-        ctx.fillText(`Level ${Math.max(currentLevel, 1)}`, canvas.width / 2, 25);
+        ctx.fillText(`Level ${Math.max(currentLevel, 1)}`, WORLD_WIDTH / 2, 25);
         if (currentLevelName) {
             ctx.font = '16px Arial';
-            ctx.fillText(currentLevelName, canvas.width / 2, 46);
+            ctx.fillText(currentLevelName, WORLD_WIDTH / 2, 46);
         }
         ctx.textAlign = 'left';
 
@@ -1524,7 +1743,7 @@ function drawGame() {
         case GameStates.TITLE:
             drawOverlay([
                 'Badger Bobble',
-                'Press Enter to start',
+                'Tap anywhere or press Enter to start',
                 'Collect berries, hearts, and mystery prizes for bonuses',
                 'Prizes may grant speed, bubble boosts, or fiery shots',
                 'Move: Arrow Keys or A/D  |  Jump: W/Up/Space',
@@ -1542,7 +1761,7 @@ function drawGame() {
                     `${currentLevelName || `Level ${currentLevel}`} cleared!`,
                     `Next up: ${nextName}`,
                     `Starting in ${Math.ceil(levelTransitionTimer / 60)}...`,
-                    'Press Enter to skip countdown',
+                    'Tap or press Enter to skip countdown',
                     `Best Combo so far: x${bestCombo}`
                 ]);
             }
@@ -1552,7 +1771,7 @@ function drawGame() {
                 'Game Over',
                 `Final Score: ${score}`,
                 `Best Combo: x${bestCombo}`,
-                'Press Enter to return to title'
+                'Tap or press Enter to return to title'
             ], { background: 'rgba(120, 0, 0, 0.8)' });
             break;
         case GameStates.VICTORY:
@@ -1560,12 +1779,14 @@ function drawGame() {
                 'You win!',
                 `Final Score: ${score}`,
                 `Best Combo: x${bestCombo}`,
-                'Press Enter to celebrate again'
+                'Tap or press Enter to celebrate again'
             ], { background: 'rgba(255, 215, 0, 0.85)', textColor: '#0a2450' });
             break;
         default:
             break;
     }
+
+    ctx.restore();
 }
 
 function drawOverlay(lines, options = {}) {
@@ -1582,8 +1803,8 @@ function drawOverlay(lines, options = {}) {
     const widths = lines.map(line => ctx.measureText(line).width);
     const blockWidth = Math.max(260, Math.max(...widths) + padding * 2);
     const blockHeight = lineHeight * lines.length + padding * 2;
-    const x = (canvas.width - blockWidth) / 2;
-    const y = canvas.height / 2 - blockHeight / 2;
+    const x = (WORLD_WIDTH - blockWidth) / 2;
+    const y = WORLD_HEIGHT / 2 - blockHeight / 2;
 
     ctx.fillStyle = background;
     ctx.fillRect(x, y, blockWidth, blockHeight);
@@ -1593,7 +1814,7 @@ function drawOverlay(lines, options = {}) {
     ctx.textBaseline = 'middle';
 
     for (let i = 0; i < lines.length; i++) {
-        ctx.fillText(lines[i], canvas.width / 2, y + padding + lineHeight * i + lineHeight / 2);
+        ctx.fillText(lines[i], WORLD_WIDTH / 2, y + padding + lineHeight * i + lineHeight / 2);
     }
 
     ctx.restore();
@@ -1980,12 +2201,12 @@ function startLevel(levelNumber) {
                 enemies.push(new Enemy(enemyPos.x, enemyPos.y, enemyPos.type ?? EnemyTypes.WALKER));
             });
         } else {
-            enemies.push(new Enemy(canvas.width / 2 - enemyWidth / 2, 100, EnemyTypes.WALKER));
+            enemies.push(new Enemy(WORLD_WIDTH / 2 - enemyWidth / 2, 100, EnemyTypes.WALKER));
         }
     } else {
         console.error(`Configuration for level ${levelNumber} not found!`);
         currentLevelName = `Level ${levelNumber}`;
-        enemies.push(new Enemy(canvas.width / 2 - enemyWidth / 2, 100, EnemyTypes.WALKER));
+        enemies.push(new Enemy(WORLD_WIDTH / 2 - enemyWidth / 2, 100, EnemyTypes.WALKER));
     }
 
     scheduleNextPrize();
