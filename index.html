@@ -7,8 +7,20 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Badger Bobble</h1>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div class="game-stage">
+        <h1 class="game-title">Badger Bobble</h1>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+    </div>
+    <div class="joystick-wrapper joystick-left">
+        <div id="left-joystick" class="joystick">
+            <div class="joystick-knob"></div>
+        </div>
+    </div>
+    <div class="joystick-wrapper joystick-right">
+        <div id="right-joystick" class="joystick">
+            <div class="joystick-knob"></div>
+        </div>
+    </div>
     <script src="script.js"></script>
 </body>
 </html>
