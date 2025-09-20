@@ -418,6 +418,7 @@ function handlePrimaryAction() {
 function setupTouchControls() {
     const leftJoystick = document.getElementById('left-joystick');
     const rightJoystick = document.getElementById('right-joystick');
+    const fireButton = document.getElementById('fire-button');
 
     if (!leftJoystick || !rightJoystick) {
         return;
@@ -551,6 +552,50 @@ function setupTouchControls() {
             keys['KeyZ'] = false;
         }
     });
+
+    if (fireButton) {
+        const setFireActive = (isPressed) => {
+            keys['KeyZ'] = isPressed;
+            fireButton.classList.toggle('is-active', isPressed);
+        };
+
+        const pressFire = (event) => {
+            primeAudio();
+            handlePrimaryAction();
+            setFireActive(true);
+            event.preventDefault();
+            event.stopPropagation();
+        };
+
+        const releaseFire = () => {
+            setFireActive(false);
+        };
+
+        const cancelFromButton = (event) => {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            releaseFire();
+        };
+
+        if (window.PointerEvent) {
+            fireButton.addEventListener('pointerdown', pressFire);
+            fireButton.addEventListener('pointerup', cancelFromButton);
+            fireButton.addEventListener('pointercancel', cancelFromButton);
+            fireButton.addEventListener('pointerleave', cancelFromButton);
+            window.addEventListener('pointerup', releaseFire);
+            window.addEventListener('pointercancel', releaseFire);
+        } else {
+            fireButton.addEventListener('touchstart', pressFire, { passive: false });
+            fireButton.addEventListener('touchend', cancelFromButton);
+            fireButton.addEventListener('touchcancel', cancelFromButton);
+            fireButton.addEventListener('mousedown', pressFire);
+            window.addEventListener('mouseup', releaseFire);
+            window.addEventListener('touchend', releaseFire);
+            window.addEventListener('touchcancel', releaseFire);
+        }
+    }
 }
 
 if ('ontouchstart' in window || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0)) {

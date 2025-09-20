@@ -91,6 +91,7 @@ canvas {
     pointer-events: auto;
     touch-action: none;
     backdrop-filter: blur(4px);
+    position: relative;
 }
 
 .joystick-knob {
@@ -102,6 +103,40 @@ canvas {
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     transform: translate3d(0, 0, 0);
     transition: transform 0.12s ease-out;
+}
+
+.joystick-fire-button {
+    position: absolute;
+    bottom: 12%;
+    right: 12%;
+    width: 38%;
+    height: 38%;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9), rgba(255, 130, 90, 0.85));
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    pointer-events: auto;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.95;
+    transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+
+.joystick-fire-button:active,
+.joystick-fire-button.is-active {
+    transform: scale(0.92);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.joystick-fire-button::after {
+    content: '';
+    width: 40%;
+    height: 40%;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.35);
+    box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
 @media (hover: hover) and (pointer: fine) {
