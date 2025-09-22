@@ -417,11 +417,8 @@ function handlePrimaryAction() {
 
 function setupTouchControls() {
     const leftJoystick = document.getElementById('left-joystick');
-    const rightJoystick = document.getElementById('right-joystick');
-
-    if (!leftJoystick || !rightJoystick) {
-        return;
-    }
+    const jumpButton = document.getElementById('jump-button');
+    const fireButton = document.getElementById('fire-button');
 
     const initJoystick = (element, onMove) => {
         const knob = element.querySelector('.joystick-knob');
@@ -509,48 +506,85 @@ function setupTouchControls() {
     };
 
     const movementThreshold = 16;
-    initJoystick(leftJoystick, (deltaX, deltaY, isActive) => {
-        if (!isActive) {
-            keys['ArrowLeft'] = false;
-            keys['ArrowRight'] = false;
-            keys['ArrowUp'] = false;
-            return;
-        }
-
-        if (Math.abs(deltaX) > movementThreshold) {
-            const movingRight = deltaX > 0;
-            keys['ArrowRight'] = movingRight;
-            keys['ArrowLeft'] = !movingRight;
-            facingRight = movingRight;
-        } else {
-            keys['ArrowLeft'] = false;
-            keys['ArrowRight'] = false;
-        }
-
-        if (deltaY < -movementThreshold) {
-            keys['ArrowUp'] = true;
-        } else if (deltaY > -movementThreshold / 2) {
-            keys['ArrowUp'] = false;
-        }
-    });
-
-    const fireThreshold = 18;
-    initJoystick(rightJoystick, (deltaX, deltaY, isActive) => {
-        if (!isActive) {
-            keys['KeyZ'] = false;
-            return;
-        }
-
-        const magnitude = Math.hypot(deltaX, deltaY);
-        if (magnitude > fireThreshold) {
-            keys['KeyZ'] = true;
-            if (Math.abs(deltaX) > movementThreshold) {
-                facingRight = deltaX > 0;
+    if (leftJoystick) {
+        initJoystick(leftJoystick, (deltaX, deltaY, isActive) => {
+            if (!isActive) {
+                keys['ArrowLeft'] = false;
+                keys['ArrowRight'] = false;
+                keys['ArrowUp'] = false;
+                return;
             }
-        } else {
-            keys['KeyZ'] = false;
+
+            if (Math.abs(deltaX) > movementThreshold) {
+                const movingRight = deltaX > 0;
+                keys['ArrowRight'] = movingRight;
+                keys['ArrowLeft'] = !movingRight;
+                facingRight = movingRight;
+            } else {
+                keys['ArrowLeft'] = false;
+                keys['ArrowRight'] = false;
+            }
+
+            if (deltaY < -movementThreshold) {
+                keys['ArrowUp'] = true;
+            } else if (deltaY > -movementThreshold / 2) {
+                keys['ArrowUp'] = false;
+            }
+        });
+    }
+
+    const bindActionButton = (button, key, activeClass) => {
+        if (!button) {
+            return;
         }
-    });
+
+        const setActive = (isPressed) => {
+            keys[key] = isPressed;
+            if (activeClass) {
+                button.classList.toggle(activeClass, isPressed);
+            }
+        };
+
+        const press = (event) => {
+            primeAudio();
+            handlePrimaryAction();
+            setActive(true);
+            event.preventDefault();
+            event.stopPropagation();
+        };
+
+        const release = () => {
+            setActive(false);
+        };
+
+        const cancel = (event) => {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            release();
+        };
+
+        if (window.PointerEvent) {
+            button.addEventListener('pointerdown', press);
+            button.addEventListener('pointerup', cancel);
+            button.addEventListener('pointercancel', cancel);
+            button.addEventListener('pointerleave', cancel);
+            window.addEventListener('pointerup', release);
+            window.addEventListener('pointercancel', release);
+        } else {
+            button.addEventListener('touchstart', press, { passive: false });
+            button.addEventListener('touchend', cancel);
+            button.addEventListener('touchcancel', cancel);
+            button.addEventListener('mousedown', press);
+            window.addEventListener('mouseup', release);
+            window.addEventListener('touchend', release);
+            window.addEventListener('touchcancel', release);
+        }
+    };
+
+    bindActionButton(jumpButton, 'ArrowUp', 'is-active');
+    bindActionButton(fireButton, 'KeyZ', 'is-active');
 }
 
 if ('ontouchstart' in window || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0)) {
