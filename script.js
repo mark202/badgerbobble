@@ -358,6 +358,7 @@ let bestCombo = 0;
 let particles = [];
 let audioContext = null;
 let audioUnlocked = false;
+let backgroundMusic = null;
 let screenShake = 0;
 let speedBoostTimer = 0;
 let bubbleBoostTimer = 0;
@@ -643,6 +644,123 @@ if (typeof window !== 'undefined') {
     }
 }
 
+const backgroundChordProgression = [
+    [196.0, 246.94, 293.66], // G major warmth
+    [174.61, 220.0, 261.63], // F major hush
+    [220.0, 261.63, 329.63], // A minor drift
+    [174.61, 220.0, 293.66], // D minor return
+];
+const backgroundMusicTargetGain = 0.16;
+const backgroundChordDurationMs = 16000;
+
+function setBackgroundChord(index, rampTime = 10) {
+    if (!backgroundMusic) {
+        return;
+    }
+    const ctx = ensureAudioContext();
+    if (!ctx) {
+        return;
+    }
+
+    const chord = backgroundChordProgression[index % backgroundChordProgression.length];
+    const now = ctx.currentTime;
+    backgroundMusic.voices.forEach((voice, voiceIndex) => {
+        const destination = chord[voiceIndex % chord.length];
+        const frequencyParam = voice.osc.frequency;
+        frequencyParam.cancelScheduledValues(now);
+        frequencyParam.setValueAtTime(frequencyParam.value, now);
+        frequencyParam.linearRampToValueAtTime(destination, now + rampTime);
+    });
+}
+
+function startBackgroundMusic() {
+    const ctx = ensureAudioContext();
+    if (!ctx) {
+        return;
+    }
+
+    if (backgroundMusic) {
+        const now = ctx.currentTime;
+        backgroundMusic.masterGain.gain.cancelScheduledValues(now);
+        backgroundMusic.masterGain.gain.setValueAtTime(backgroundMusic.masterGain.gain.value, now);
+        backgroundMusic.masterGain.gain.linearRampToValueAtTime(backgroundMusicTargetGain, now + 2);
+        return;
+    }
+
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    masterGain.connect(ctx.destination);
+
+    const voices = backgroundChordProgression[0].map((frequency, index) => {
+        const osc = ctx.createOscillator();
+        osc.type = index === 2 ? 'triangle' : 'sine';
+        osc.frequency.setValueAtTime(frequency, ctx.currentTime);
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(950, ctx.currentTime);
+        filter.Q.value = 0.6;
+
+        const voiceGain = ctx.createGain();
+        const baseGain = index === 0 ? 0.28 : index === 1 ? 0.24 : 0.18;
+        voiceGain.gain.setValueAtTime(baseGain, ctx.currentTime);
+
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(0.05 + index * 0.02, ctx.currentTime);
+
+        const lfoDepth = ctx.createGain();
+        lfoDepth.gain.setValueAtTime(baseGain * 0.45, ctx.currentTime);
+        lfo.connect(lfoDepth).connect(voiceGain.gain);
+
+        osc.connect(filter).connect(voiceGain).connect(masterGain);
+
+        osc.start();
+        lfo.start();
+
+        return { osc, voiceGain, lfo };
+    });
+
+    const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+        data[i] = (Math.random() * 2 - 1) * 0.2;
+    }
+    const noiseSource = ctx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+    noiseSource.loop = true;
+
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.setValueAtTime(700, ctx.currentTime);
+    noiseFilter.Q.value = 0.5;
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.02, ctx.currentTime);
+
+    noiseSource.connect(noiseFilter).connect(noiseGain).connect(masterGain);
+    noiseSource.start();
+
+    backgroundMusic = {
+        masterGain,
+        voices,
+        noiseSource,
+        chordIndex: 0,
+        intervalId: null,
+    };
+
+    const now = ctx.currentTime;
+    masterGain.gain.linearRampToValueAtTime(backgroundMusicTargetGain, now + 8);
+
+    backgroundMusic.intervalId = setInterval(() => {
+        if (!backgroundMusic) {
+            return;
+        }
+        backgroundMusic.chordIndex = (backgroundMusic.chordIndex + 1) % backgroundChordProgression.length;
+        setBackgroundChord(backgroundMusic.chordIndex);
+    }, backgroundChordDurationMs);
+}
+
 function ensureAudioContext() {
     if (typeof window === 'undefined') {
         return null;
@@ -663,11 +781,13 @@ function ensureAudioContext() {
 function primeAudio() {
     if (audioUnlocked) {
         ensureAudioContext();
+        startBackgroundMusic();
         return;
     }
     const ctx = ensureAudioContext();
     if (ctx) {
         audioUnlocked = true;
+        startBackgroundMusic();
     }
 }
 
