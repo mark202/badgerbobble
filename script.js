@@ -358,6 +358,7 @@ let bestCombo = 0;
 let particles = [];
 let audioContext = null;
 let audioUnlocked = false;
+let backgroundMusic = null;
 let screenShake = 0;
 let speedBoostTimer = 0;
 let bubbleBoostTimer = 0;
@@ -609,6 +610,277 @@ if (typeof window !== 'undefined') {
     }
 }
 
+const backgroundChordProgression = [
+    [196.0, 246.94, 293.66], // G major warmth
+    [174.61, 220.0, 261.63], // F major hush
+    [220.0, 261.63, 329.63], // A minor drift
+    [196.0, 233.08, 293.66], // Gsus shimmer
+    [174.61, 220.0, 293.66], // D minor return
+];
+const backgroundMusicTargetGain = 0.16;
+const backgroundChordDurationMs = 16000;
+const backgroundArpeggioPatternDegrees = [0, 2, 4, 7, 4, 2, 5, 9];
+const backgroundArpeggioStepMs = 420;
+const backgroundArpeggioLevel = 0.12;
+const backgroundPercussionIntervalMs = 3600;
+const backgroundPercussionLevel = 0.08;
+
+function setBackgroundChord(index, rampTime = 10) {
+    if (!backgroundMusic) {
+        return;
+    }
+    const ctx = ensureAudioContext();
+    if (!ctx) {
+        return;
+    }
+
+    const chord = backgroundChordProgression[index % backgroundChordProgression.length];
+    const now = ctx.currentTime;
+    backgroundMusic.voices.forEach((voice, voiceIndex) => {
+        const destination = chord[voiceIndex % chord.length];
+        const frequencyParam = voice.osc.frequency;
+        frequencyParam.cancelScheduledValues(now);
+        frequencyParam.setValueAtTime(frequencyParam.value, now);
+        frequencyParam.linearRampToValueAtTime(destination, now + rampTime);
+    });
+    if (backgroundMusic.arpeggio && backgroundMusic.arpeggio.filter) {
+        const arpFilter = backgroundMusic.arpeggio.filter.frequency;
+        arpFilter.cancelScheduledValues(now);
+        arpFilter.setValueAtTime(arpFilter.value, now);
+        arpFilter.linearRampToValueAtTime(Math.max(700, chord[0] * 4), now + rampTime);
+        backgroundMusic.arpeggio.stepIndex = 0;
+    }
+    if (backgroundMusic.percussion && backgroundMusic.percussion.filter) {
+        const percFilter = backgroundMusic.percussion.filter.frequency;
+        percFilter.cancelScheduledValues(now);
+        percFilter.setValueAtTime(percFilter.value, now);
+        percFilter.linearRampToValueAtTime(Math.min(2600, chord[0] * 6), now + rampTime);
+    }
+}
+
+function startBackgroundMusic() {
+    const ctx = ensureAudioContext();
+    if (!ctx) {
+        return;
+    }
+
+    if (backgroundMusic) {
+        const now = ctx.currentTime;
+        backgroundMusic.masterGain.gain.cancelScheduledValues(now);
+        backgroundMusic.masterGain.gain.setValueAtTime(backgroundMusic.masterGain.gain.value, now);
+        backgroundMusic.masterGain.gain.linearRampToValueAtTime(backgroundMusicTargetGain, now + 2);
+        if (backgroundMusic.arpeggio) {
+            const arpGain = backgroundMusic.arpeggio.gain.gain;
+            arpGain.cancelScheduledValues(now);
+            arpGain.setValueAtTime(arpGain.value || 0.0001, now);
+            arpGain.linearRampToValueAtTime(backgroundMusic.arpeggio.level, now + 2);
+        }
+        if (backgroundMusic.percussion) {
+            const percGain = backgroundMusic.percussion.gain.gain;
+            percGain.cancelScheduledValues(now);
+            percGain.setValueAtTime(percGain.value || 0.0001, now);
+            percGain.linearRampToValueAtTime(backgroundPercussionLevel, now + 2.5);
+        }
+        return;
+    }
+
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    masterGain.connect(ctx.destination);
+
+    const voices = backgroundChordProgression[0].map((frequency, index) => {
+        const osc = ctx.createOscillator();
+        osc.type = index === 2 ? 'triangle' : 'sine';
+        osc.frequency.setValueAtTime(frequency, ctx.currentTime);
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(950, ctx.currentTime);
+        filter.Q.value = 0.6;
+
+        const voiceGain = ctx.createGain();
+        const baseGain = index === 0 ? 0.28 : index === 1 ? 0.24 : 0.18;
+        voiceGain.gain.setValueAtTime(baseGain, ctx.currentTime);
+
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(0.05 + index * 0.02, ctx.currentTime);
+
+        const lfoDepth = ctx.createGain();
+        lfoDepth.gain.setValueAtTime(baseGain * 0.45, ctx.currentTime);
+        lfo.connect(lfoDepth).connect(voiceGain.gain);
+
+        osc.connect(filter).connect(voiceGain).connect(masterGain);
+
+        osc.start();
+        lfo.start();
+
+        return { osc, voiceGain, lfo };
+    });
+
+    const arpeggioOsc = ctx.createOscillator();
+    arpeggioOsc.type = 'sawtooth';
+    arpeggioOsc.frequency.setValueAtTime(backgroundChordProgression[0][0], ctx.currentTime);
+
+    const arpeggioFilter = ctx.createBiquadFilter();
+    arpeggioFilter.type = 'bandpass';
+    arpeggioFilter.frequency.setValueAtTime(1400, ctx.currentTime);
+    arpeggioFilter.Q.value = 4;
+
+    const arpeggioGain = ctx.createGain();
+    arpeggioGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+
+    arpeggioOsc.connect(arpeggioFilter).connect(arpeggioGain).connect(masterGain);
+    arpeggioOsc.start();
+
+    const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+        data[i] = (Math.random() * 2 - 1) * 0.2;
+    }
+    const noiseSource = ctx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+    noiseSource.loop = true;
+
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.setValueAtTime(700, ctx.currentTime);
+    noiseFilter.Q.value = 0.5;
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.02, ctx.currentTime);
+
+    noiseSource.connect(noiseFilter).connect(noiseGain).connect(masterGain);
+    noiseSource.start();
+
+    const percussionBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.35), ctx.sampleRate);
+    const percussionData = percussionBuffer.getChannelData(0);
+    for (let i = 0; i < percussionData.length; i++) {
+        const progress = i / percussionData.length;
+        const envelope = Math.pow(1 - progress, 2.4);
+        const sparkle = Math.sin(progress * Math.PI * 16) * 0.3;
+        percussionData[i] = ((Math.random() * 2 - 1) * 0.7 + sparkle) * envelope;
+    }
+
+    const percussionFilter = ctx.createBiquadFilter();
+    percussionFilter.type = 'highpass';
+    percussionFilter.frequency.setValueAtTime(900, ctx.currentTime);
+    percussionFilter.Q.value = 0.8;
+
+    const percussionGain = ctx.createGain();
+    percussionGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    percussionFilter.connect(percussionGain).connect(masterGain);
+
+    backgroundMusic = {
+        masterGain,
+        voices,
+        noiseSource,
+        chordIndex: 0,
+        intervalId: null,
+        arpeggio: {
+            osc: arpeggioOsc,
+            gain: arpeggioGain,
+            filter: arpeggioFilter,
+            level: backgroundArpeggioLevel,
+            stepIndex: 0,
+            intervalId: null,
+        },
+        percussion: {
+            buffer: percussionBuffer,
+            filter: percussionFilter,
+            gain: percussionGain,
+            intervalId: null,
+        },
+    };
+
+    const now = ctx.currentTime;
+    masterGain.gain.linearRampToValueAtTime(backgroundMusicTargetGain, now + 8);
+    arpeggioGain.gain.linearRampToValueAtTime(backgroundArpeggioLevel, now + 4);
+    percussionGain.gain.linearRampToValueAtTime(backgroundPercussionLevel, now + 6);
+
+    backgroundMusic.intervalId = setInterval(() => {
+        if (!backgroundMusic) {
+            return;
+        }
+        backgroundMusic.chordIndex = (backgroundMusic.chordIndex + 1) % backgroundChordProgression.length;
+        setBackgroundChord(backgroundMusic.chordIndex);
+    }, backgroundChordDurationMs);
+
+    scheduleArpeggioStep();
+    backgroundMusic.arpeggio.intervalId = setInterval(scheduleArpeggioStep, backgroundArpeggioStepMs);
+    triggerPercussionAccent();
+    backgroundMusic.percussion.intervalId = setInterval(triggerPercussionAccent, backgroundPercussionIntervalMs);
+}
+
+function transposeFrequency(baseFrequency, semitoneOffset) {
+    return baseFrequency * Math.pow(2, semitoneOffset / 12);
+}
+
+function chordUsesMinorThird(chord) {
+    const ratio = chord[1] / chord[0];
+    return ratio < 1.24;
+}
+
+function arpeggioFrequencyForStep(chord, stepIndex) {
+    const majorScale = [0, 2, 4, 5, 7, 9, 11];
+    const minorScale = [0, 2, 3, 5, 7, 8, 10];
+    const scale = chordUsesMinorThird(chord) ? minorScale : majorScale;
+    const degree = backgroundArpeggioPatternDegrees[stepIndex % backgroundArpeggioPatternDegrees.length];
+    const octave = Math.floor(degree / scale.length);
+    const scaleIndex = degree % scale.length;
+    const semitoneOffset = scale[scaleIndex] + octave * 12;
+    return transposeFrequency(chord[0], semitoneOffset);
+}
+
+function scheduleArpeggioStep() {
+    if (!backgroundMusic || !backgroundMusic.arpeggio) {
+        return;
+    }
+    const ctx = ensureAudioContext();
+    if (!ctx) {
+        return;
+    }
+    const chord = backgroundChordProgression[backgroundMusic.chordIndex];
+    const now = ctx.currentTime + 0.05;
+    const arpeggio = backgroundMusic.arpeggio;
+    const freq = arpeggioFrequencyForStep(chord, arpeggio.stepIndex);
+    arpeggio.osc.frequency.setValueAtTime(freq, now);
+
+    const gainParam = arpeggio.gain.gain;
+    gainParam.cancelScheduledValues(now - 0.1);
+    gainParam.setValueAtTime(0.0001, now);
+    gainParam.linearRampToValueAtTime(arpeggio.level, now + 0.04);
+    gainParam.exponentialRampToValueAtTime(0.0001, now + 0.36);
+
+    arpeggio.stepIndex = (arpeggio.stepIndex + 1) % backgroundArpeggioPatternDegrees.length;
+}
+
+function triggerPercussionAccent() {
+    if (!backgroundMusic || !backgroundMusic.percussion) {
+        return;
+    }
+    const ctx = ensureAudioContext();
+    if (!ctx) {
+        return;
+    }
+    const now = ctx.currentTime + 0.05;
+    const percussion = backgroundMusic.percussion;
+
+    const source = ctx.createBufferSource();
+    source.buffer = percussion.buffer;
+    source.playbackRate.setValueAtTime(0.9 + Math.random() * 0.2, now);
+
+    const accentGain = ctx.createGain();
+    accentGain.gain.setValueAtTime(0.0001, now);
+    accentGain.linearRampToValueAtTime(1, now + 0.02);
+    accentGain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+
+    source.connect(accentGain).connect(percussion.filter);
+
+    source.start(now);
+    source.stop(now + 0.6);
+}
+
 function ensureAudioContext() {
     if (typeof window === 'undefined') {
         return null;
@@ -629,11 +901,13 @@ function ensureAudioContext() {
 function primeAudio() {
     if (audioUnlocked) {
         ensureAudioContext();
+        startBackgroundMusic();
         return;
     }
     const ctx = ensureAudioContext();
     if (ctx) {
         audioUnlocked = true;
+        startBackgroundMusic();
     }
 }
 
