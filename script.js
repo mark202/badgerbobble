@@ -393,6 +393,9 @@ function handlePrimaryAction() {
             startNewGame();
             playSound('level');
             return true;
+        case GameStates.PAUSED:
+            setGameState(GameStates.PLAYING);
+            return true;
         case GameStates.LEVEL_TRANSITION:
             if (pendingLevel !== null) {
                 startLevel(pendingLevel);
@@ -1795,7 +1798,12 @@ function drawGame() {
             drawTitleScreen();
             break;
         case GameStates.PAUSED:
-            drawOverlay(['Paused', 'Press Escape or P to resume', 'Press R to restart', `Best Combo so far: x${bestCombo}`]);
+            drawOverlay([
+                'Paused',
+                'Tap the screen or press Enter/Escape/P to resume',
+                'Press R on keyboard to restart',
+                `Best Combo so far: x${bestCombo}`
+            ]);
             break;
         case GameStates.LEVEL_TRANSITION:
             if (pendingLevel !== null) {
@@ -1988,8 +1996,9 @@ function drawTitleScreen() {
     ];
 
     const controls = [
-        'Move: Arrow Keys or A/D    Jump: W / Up / Space',
-        'Shoot Bubble: Z or J    Pause: P or Escape'
+        'Keyboard: Move with Arrow Keys or A/D    Jump with W / Up / Space',
+        'Keyboard: Shoot bubbles with Z or J    Pause with P or Escape',
+        'Touch: Drag the on-screen joystick to move and tap Jump/Bubble to act'
     ];
 
     const storyBlockHeight = storyLines.reduce((height, line) => (
