@@ -24,6 +24,21 @@ const woodlandFireflies = Array.from({ length: 18 }, () => ({
     offset: Math.random() * Math.PI * 2
 }));
 
+const swampLilies = Array.from({ length: 12 }, () => ({
+    x: Math.random(),
+    y: 0.48 + Math.random() * 0.38,
+    size: 0.035 + Math.random() * 0.06,
+    drift: 0.2 + Math.random() * 0.6,
+    offset: Math.random() * Math.PI * 2
+}));
+
+const swampGlints = Array.from({ length: 22 }, () => ({
+    x: Math.random(),
+    y: 0.52 + Math.random() * 0.44,
+    speed: 0.18 + Math.random() * 0.55,
+    phase: Math.random() * Math.PI * 2
+}));
+
 const GameStates = {
     LOADING: 'loading',
     TITLE: 'title',
@@ -802,27 +817,168 @@ function spawnRandomPrize() {
 
 function drawGround() {
     const groundTop = WORLD_HEIGHT - FLOOR_HEIGHT;
+    const now = performance.now() * 0.0015;
 
-    const groundGradient = ctx.createLinearGradient(0, groundTop, 0, WORLD_HEIGHT);
-    groundGradient.addColorStop(0, '#3b2a1a');
-    groundGradient.addColorStop(0.45, '#5e3c1f');
-    groundGradient.addColorStop(1, '#27160b');
-    ctx.fillStyle = groundGradient;
+    const waterGradient = ctx.createLinearGradient(0, groundTop, 0, WORLD_HEIGHT);
+    waterGradient.addColorStop(0, '#1b3d36');
+    waterGradient.addColorStop(0.45, '#143129');
+    waterGradient.addColorStop(1, '#0a221b');
+    ctx.fillStyle = waterGradient;
     ctx.fillRect(0, groundTop, WORLD_WIDTH, FLOOR_HEIGHT);
 
-    const highlightGradient = ctx.createLinearGradient(0, groundTop, 0, groundTop + 12);
-    highlightGradient.addColorStop(0, 'rgba(255, 245, 215, 0.35)');
-    highlightGradient.addColorStop(1, 'rgba(255, 245, 215, 0)');
-    ctx.fillStyle = highlightGradient;
-    ctx.fillRect(0, groundTop, WORLD_WIDTH, 12);
+    const shimmerGradient = ctx.createLinearGradient(0, groundTop, 0, groundTop + 18);
+    shimmerGradient.addColorStop(0, 'rgba(162, 236, 206, 0.35)');
+    shimmerGradient.addColorStop(1, 'rgba(162, 236, 206, 0)');
+    ctx.fillStyle = shimmerGradient;
+    ctx.fillRect(0, groundTop, WORLD_WIDTH, 18);
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-    ctx.fillRect(0, WORLD_HEIGHT - 6, WORLD_WIDTH, 6);
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-    for (let x = 0; x < WORLD_WIDTH; x += 48) {
-        ctx.fillRect(x + 12, WORLD_HEIGHT - 18, 26, 6);
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = 'rgba(94, 196, 170, 0.45)';
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 6; i++) {
+        const rippleProgress = i / 6;
+        const rippleY = groundTop + FLOOR_HEIGHT * (0.18 + rippleProgress * 0.62) + Math.sin(now * 1.6 + i) * 4;
+        const rippleWidth = WORLD_WIDTH * (0.5 + rippleProgress * 0.35);
+        const rippleHeight = FLOOR_HEIGHT * (0.12 - rippleProgress * 0.015);
+        ctx.beginPath();
+        ctx.ellipse(WORLD_WIDTH / 2, rippleY, rippleWidth, rippleHeight, 0, 0, Math.PI * 2);
+        ctx.stroke();
     }
+    ctx.restore();
+
+    ctx.save();
+    for (let i = 0; i < 8; i++) {
+        const padProgress = (i + 1) / 9;
+        const baseX = 40 + padProgress * (WORLD_WIDTH - 80);
+        const drift = Math.sin(now * 0.8 + i * 1.7) * 18;
+        const lilyX = baseX + drift;
+        const lilyY = groundTop + FLOOR_HEIGHT * (0.28 + Math.sin(i * 1.3 + now * 0.9) * 0.12);
+        const lilyRadius = 26 + Math.sin(i * 2.4 + now * 0.5) * 6;
+
+        ctx.fillStyle = '#2a6048';
+        ctx.beginPath();
+        ctx.ellipse(lilyX, lilyY, lilyRadius, lilyRadius * 0.68, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#1d4534';
+        ctx.beginPath();
+        ctx.ellipse(lilyX + lilyRadius * 0.28, lilyY + lilyRadius * 0.08, lilyRadius * 0.22, lilyRadius * 0.14, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(180, 240, 210, 0.2)';
+        ctx.beginPath();
+        ctx.ellipse(lilyX - lilyRadius * 0.18, lilyY - lilyRadius * 0.12, lilyRadius * 0.5, lilyRadius * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = 'rgba(10, 25, 20, 0.55)';
+    ctx.fillRect(0, WORLD_HEIGHT - 6, WORLD_WIDTH, 6);
+    ctx.restore();
+}
+
+function drawMushroomPlatform(platform) {
+    const { x, y, width, height } = platform;
+    const capHeight = Math.max(height * 2.2, 28);
+    const capTop = y - capHeight * 0.62;
+    const capBottom = y + height;
+    const stemHeight = Math.max(height * 1.7, 30);
+    const stemWidth = Math.min(width * 0.45, 42);
+    const stemX = x + (width - stemWidth) / 2;
+    const now = performance.now() * 0.002;
+
+    const stemGradient = ctx.createLinearGradient(0, capBottom, 0, capBottom + stemHeight);
+    stemGradient.addColorStop(0, '#f4efd8');
+    stemGradient.addColorStop(0.45, '#d8c7a4');
+    stemGradient.addColorStop(1, '#bfa27a');
+    ctx.fillStyle = stemGradient;
+    roundedRectPath(stemX, capBottom, stemWidth, stemHeight, Math.min(stemWidth / 2, 12));
+    ctx.fill();
+
+    const gillGradient = ctx.createLinearGradient(0, capBottom - capHeight * 0.35, 0, capBottom + 4);
+    gillGradient.addColorStop(0, '#f1dbc0');
+    gillGradient.addColorStop(1, '#bf9370');
+    ctx.fillStyle = gillGradient;
+    ctx.beginPath();
+    ctx.moveTo(x + width * 0.08, capBottom);
+    ctx.quadraticCurveTo(x + width / 2, capBottom - capHeight * 0.45, x + width * 0.92, capBottom);
+    ctx.closePath();
+    ctx.fill();
+
+    const capGradient = ctx.createLinearGradient(0, capTop, 0, capBottom);
+    capGradient.addColorStop(0, '#ff6c7c');
+    capGradient.addColorStop(0.55, '#d5445f');
+    capGradient.addColorStop(1, '#9f2f4a');
+    ctx.fillStyle = capGradient;
+    ctx.beginPath();
+    ctx.moveTo(x, capBottom);
+    ctx.quadraticCurveTo(x + width / 2, capTop, x + width, capBottom);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(34, 5, 18, 0.45)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, capBottom - 1);
+    ctx.quadraticCurveTo(x + width / 2, capTop + 2, x + width, capBottom - 1);
+    ctx.stroke();
+
+    const highlight = ctx.createLinearGradient(0, capTop, 0, y + height * 0.4);
+    highlight.addColorStop(0, 'rgba(255, 255, 255, 0.75)');
+    highlight.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = highlight;
+    ctx.beginPath();
+    ctx.moveTo(x + width * 0.12, y + height * 0.35);
+    ctx.quadraticCurveTo(x + width / 2, capTop + capHeight * 0.25, x + width * 0.88, y + height * 0.35);
+    ctx.lineTo(x + width * 0.88, y + height * 0.45);
+    ctx.quadraticCurveTo(x + width / 2, capTop + capHeight * 0.38, x + width * 0.12, y + height * 0.45);
+    ctx.closePath();
+    ctx.fill();
+
+    const spotCount = Math.max(4, Math.floor(width / 28));
+    const seed = Math.sin((x + width) * 0.12 + y * 0.37) * 43758.5453;
+    for (let i = 0; i < spotCount; i++) {
+        const t = (i + 0.5) / spotCount;
+        const spotX = x + width * t + Math.sin(seed + i * 12.3) * width * 0.05;
+        const spotY = capBottom - capHeight * (0.45 + 0.22 * Math.sin(seed * 0.1 + i * 1.7));
+        const radius = Math.max(6, width / (spotCount * 2.4)) * (0.85 + 0.25 * Math.sin(seed * 0.05 + i * 2.1));
+
+        ctx.fillStyle = 'rgba(255, 248, 235, 0.92)';
+        ctx.beginPath();
+        ctx.ellipse(spotX, spotY, radius, radius * 0.75, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+        ctx.beginPath();
+        ctx.ellipse(spotX - radius * 0.2, spotY - radius * 0.2, radius * 0.38, radius * 0.28, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(255, 120, 160, 0.18)';
+    ctx.beginPath();
+    ctx.ellipse(x + width / 2, capTop + capHeight * 0.25, width * 0.45, capHeight * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    ctx.fillRect(x, capBottom - 4, width, 4);
+
+    const glowStrength = 4 + Math.sin(now + x * 0.04) * 2;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const glowGradient = ctx.createRadialGradient(x + width / 2, capTop + capHeight * 0.4, 0, x + width / 2, capTop + capHeight * 0.4, width * 0.6);
+    glowGradient.addColorStop(0, `rgba(255, 90, 150, ${0.18 + glowStrength * 0.01})`);
+    glowGradient.addColorStop(1, 'rgba(40, 8, 18, 0)');
+    ctx.fillStyle = glowGradient;
+    ctx.beginPath();
+    ctx.arc(x + width / 2, capTop + capHeight * 0.4, width * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
 }
 
 function drawBadger() {
@@ -1744,9 +1900,8 @@ function drawGame() {
 
     drawGround();
 
-    ctx.fillStyle = '#8B4513';
     for (const platform of platforms) {
-        ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+        drawMushroomPlatform(platform);
     }
 
     drawBadger();
@@ -1874,68 +2029,99 @@ function drawOverlay(lines, options = {}) {
 
 function drawBackdrop() {
     const progression = Math.min(currentLevel / maxLevels, 1);
-    const skyTop = progression > 0.75 ? '#1f2c5a' : '#071428';
-    const skyMid = progression > 0.5 ? '#143355' : '#0f2744';
-    const skyBottom = '#122437';
+    const murkTop = progression > 0.7 ? '#10322b' : '#061c16';
+    const murkMid = progression > 0.35 ? '#0c3427' : '#07251b';
+    const murkBottom = '#041510';
 
     const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, skyTop);
-    gradient.addColorStop(0.55, skyMid);
-    gradient.addColorStop(1, skyBottom);
+    gradient.addColorStop(0, murkTop);
+    gradient.addColorStop(0.55, murkMid);
+    gradient.addColorStop(1, murkBottom);
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const now = performance.now() * 0.001;
+    const now = performance.now() * 0.0012;
+
+    const glowGradient = ctx.createRadialGradient(
+        canvas.width * 0.5,
+        canvas.height * 0.68,
+        canvas.height * 0.05,
+        canvas.width * 0.5,
+        canvas.height * 0.68,
+        canvas.height * 0.72
+    );
+    glowGradient.addColorStop(0, 'rgba(58, 154, 112, 0.35)');
+    glowGradient.addColorStop(0.5, 'rgba(30, 84, 68, 0.2)');
+    glowGradient.addColorStop(1, 'rgba(9, 20, 16, 0)');
+    ctx.fillStyle = glowGradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    nightSkySparks.forEach(star => {
-        const px = star.x * canvas.width;
-        const py = star.y * canvas.height;
-        const twinkle = (Math.sin(now * 2 + star.phase) + 1.4) * 0.35;
-        const radius = star.radius + twinkle;
-        const gradientSpark = ctx.createRadialGradient(px, py, 0, px, py, radius * 6);
-        gradientSpark.addColorStop(0, `rgba(255, 255, 255, ${0.85 - twinkle * 0.3})`);
-        gradientSpark.addColorStop(0.5, `rgba(173, 214, 255, ${0.35 - twinkle * 0.2})`);
-        gradientSpark.addColorStop(1, 'rgba(10, 20, 35, 0)');
-        ctx.fillStyle = gradientSpark;
+    ctx.globalAlpha = 0.3;
+    for (let i = 0; i < 12; i++) {
+        const layer = i / 12;
+        const y = canvas.height * (0.3 + layer * 0.6) + Math.sin(now * 0.6 + i) * canvas.height * 0.015;
+        const amplitude = canvas.height * (0.018 + layer * 0.02);
+        const frequency = 3 + layer * 4;
         ctx.beginPath();
-        ctx.arc(px, py, radius * 6, 0, Math.PI * 2);
+        ctx.moveTo(0, y);
+        for (let x = 0; x <= canvas.width; x += 12) {
+            const wave = Math.sin((x / canvas.width) * Math.PI * frequency + now * 1.4 + i) * amplitude;
+            ctx.lineTo(x, y + wave);
+        }
+        ctx.lineTo(canvas.width, canvas.height);
+        ctx.lineTo(0, canvas.height);
+        const colorStop = 0.15 + layer * 0.35;
+        const fill = ctx.createLinearGradient(0, y - amplitude * 2, 0, canvas.height);
+        fill.addColorStop(0, `rgba(27, 77, 60, ${0.25 - layer * 0.12})`);
+        fill.addColorStop(1, 'rgba(3, 10, 8, 0)');
+        ctx.fillStyle = fill;
+        ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    swampGlints.forEach(glint => {
+        const px = glint.x * canvas.width;
+        const py = glint.y * canvas.height + Math.sin(now * glint.speed + glint.phase) * canvas.height * 0.02;
+        const radius = 8 + Math.sin(now * 1.5 + glint.phase) * 5;
+        const sparkle = ctx.createRadialGradient(px, py, 0, px, py, radius * 3.6);
+        sparkle.addColorStop(0, 'rgba(120, 255, 220, 0.55)');
+        sparkle.addColorStop(0.45, 'rgba(70, 200, 170, 0.25)');
+        sparkle.addColorStop(1, 'rgba(18, 40, 32, 0)');
+        ctx.fillStyle = sparkle;
+        ctx.beginPath();
+        ctx.arc(px, py, radius * 3.6, 0, Math.PI * 2);
         ctx.fill();
     });
     ctx.restore();
 
-    // moon glow
-    const moonX = canvas.width * 0.2;
-    const moonY = canvas.height * 0.18;
-    const moonRadius = canvas.height * 0.12;
-    const moonGlow = ctx.createRadialGradient(moonX, moonY, moonRadius * 0.3, moonX, moonY, moonRadius * 1.4);
-    moonGlow.addColorStop(0, 'rgba(246, 250, 255, 0.95)');
-    moonGlow.addColorStop(0.55, 'rgba(210, 225, 255, 0.45)');
-    moonGlow.addColorStop(1, 'rgba(26, 43, 63, 0)');
-    ctx.fillStyle = moonGlow;
-    ctx.beginPath();
-    ctx.arc(moonX, moonY, moonRadius * 1.4, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.save();
+    ctx.globalAlpha = 0.42;
+    swampLilies.forEach(lily => {
+        const px = lily.x * canvas.width + Math.sin(now * lily.drift + lily.offset) * canvas.width * 0.02;
+        const py = lily.y * canvas.height + Math.cos(now * (0.8 + lily.drift * 0.6) + lily.offset) * canvas.height * 0.012;
+        const radiusX = lily.size * canvas.width * 0.7;
+        const radiusY = radiusX * 0.55;
 
-    ctx.fillStyle = '#f5f8ff';
-    ctx.beginPath();
-    ctx.arc(moonX, moonY, moonRadius * 0.6, 0, Math.PI * 2);
-    ctx.fill();
+        ctx.fillStyle = '#274f3b';
+        ctx.beginPath();
+        ctx.ellipse(px, py, radiusX, radiusY, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-    // distant ridges
-    drawMountainLayer([{ x: 0, y: 0.62 }, { x: 0.12, y: 0.52 }, { x: 0.28, y: 0.6 }, { x: 0.46, y: 0.48 }, { x: 0.65, y: 0.66 }, { x: 0.86, y: 0.5 }, { x: 1, y: 0.6 }], '#0d1e31', 0.9);
-    drawMountainLayer([{ x: 0, y: 0.72 }, { x: 0.16, y: 0.6 }, { x: 0.35, y: 0.68 }, { x: 0.56, y: 0.56 }, { x: 0.74, y: 0.72 }, { x: 0.92, y: 0.6 }, { x: 1, y: 0.7 }], '#13263a', 0.92);
-    drawMountainLayer([{ x: 0, y: 0.84 }, { x: 0.2, y: 0.7 }, { x: 0.4, y: 0.8 }, { x: 0.65, y: 0.66 }, { x: 0.82, y: 0.78 }, { x: 1, y: 0.72 }], '#162d40', 0.95);
+        ctx.fillStyle = '#356a4c';
+        ctx.beginPath();
+        ctx.ellipse(px - radiusX * 0.25, py - radiusY * 0.05, radiusX * 0.6, radiusY * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-    // woodland haze
-    const mistGradient = ctx.createLinearGradient(0, canvas.height * 0.6, 0, canvas.height);
-    mistGradient.addColorStop(0, 'rgba(34, 64, 82, 0.0)');
-    mistGradient.addColorStop(1, 'rgba(18, 37, 48, 0.85)');
-    ctx.fillStyle = mistGradient;
-    ctx.fillRect(0, canvas.height * 0.55, canvas.width, canvas.height * 0.45);
+        ctx.fillStyle = 'rgba(190, 255, 220, 0.18)';
+        ctx.beginPath();
+        ctx.ellipse(px + radiusX * 0.18, py - radiusY * 0.42, radiusX * 0.35, radiusY * 0.24, 0, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.restore();
 
-    // fireflies shimmering near ground
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     woodlandFireflies.forEach(firefly => {
@@ -1944,15 +2130,21 @@ function drawBackdrop() {
         const pulse = (Math.sin(now * 4 + firefly.offset) + 1) * 0.5;
         const size = 2 + pulse * 4;
         const glow = ctx.createRadialGradient(px, py, 0, px, py, size * 5);
-        glow.addColorStop(0, `rgba(255, 240, 170, ${0.8})`);
-        glow.addColorStop(0.4, `rgba(255, 191, 105, ${0.45})`);
-        glow.addColorStop(1, 'rgba(20, 35, 40, 0)');
+        glow.addColorStop(0, `rgba(188, 255, 205, ${0.8})`);
+        glow.addColorStop(0.4, `rgba(114, 220, 170, ${0.45})`);
+        glow.addColorStop(1, 'rgba(14, 28, 22, 0)');
         ctx.fillStyle = glow;
         ctx.beginPath();
         ctx.arc(px, py, size * 5, 0, Math.PI * 2);
         ctx.fill();
     });
     ctx.restore();
+
+    const mistGradient = ctx.createLinearGradient(0, canvas.height * 0.62, 0, canvas.height);
+    mistGradient.addColorStop(0, 'rgba(18, 44, 36, 0.0)');
+    mistGradient.addColorStop(1, 'rgba(6, 20, 16, 0.85)');
+    ctx.fillStyle = mistGradient;
+    ctx.fillRect(0, canvas.height * 0.58, canvas.width, canvas.height * 0.42);
 }
 
 function drawMountainLayer(points, color, opacity = 1) {
