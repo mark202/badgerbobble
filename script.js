@@ -2258,7 +2258,14 @@ function drawEnemySprite(enemy) {
         ctx.save();
         ctx.strokeStyle = 'rgba(173, 216, 230, 0.8)';
         ctx.lineWidth = 3;
-        roundedRectPath(enemy.x - 4, enemy.y - 4, enemy.width + 8, enemy.height + 8, 12);
+        ctx.beginPath();
+        ctx.ellipse(
+            enemy.x + enemy.width / 2,
+            enemy.y + enemy.height / 2,
+            enemy.width / 2 + 4,
+            enemy.height / 2 + 4,
+            0, 0, Math.PI * 2
+        );
         ctx.stroke();
         ctx.restore();
     }
